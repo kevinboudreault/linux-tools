@@ -39,4 +39,4 @@ This repository contains:
 ### Steps
 1. **Clone the repo**:
    ```bash
-   git clone https://github.com/your-username/linux-tools-config.git
+   git clone https://github.com/kevinboudreault/linux-tools.git
