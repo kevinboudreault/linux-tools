@@ -1,0 +1,31 @@
+#!/bin/zsh
+
+echo "Hostname: $(hostname)"
+echo "Time:     $(date)"
+
+#HD check
+function checkHDSpace(){
+	#HD space left
+	echo "==={ HD }===\n"
+	df -h | grep /dev
+	echo -e "\n\n"
+}
+
+#Docker check
+function dockerNumbCount(){
+        STATUS=${1:="running"}
+        echo $(docker ps --filter "status=${STATUS}" --format '{{.ID}}' | wc -l)
+}
+
+function dockerStatus(){
+	CONTSTATUS=${1:="running"}
+	CONTCOUNT=$(dockerNumbCount ${CONTSTATUS})
+
+	echo "====[ $CONTSTATUS # $CONTCOUNT ]====\n"
+	docker ps --filter "status=${CONTSTATUS}" --format "[{{.ID}}] {{.Names}} : ({{.Status}}) {{.Ports}}"
+	echo -e "\n\n"
+}
+
+checkHDSpace
+dockerStatus "exited"
+dockerStatus
