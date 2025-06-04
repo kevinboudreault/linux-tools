@@ -70,7 +70,7 @@ ZSH_THEME="duellj"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git aliases brew bun colored-man-pages colorize composer dnf docker docker-compose fzf git-commit history jsontools kitty laravel laravel5 node npm nvm zsh-nvm perl pipenv python pylint pyenv rsync safe-paste sublime symfony symfony6 systemadmin thefuck themes timer ufw web-search wp-cli zsh-autosuggestions zsh-syntax-highlighting zsh-bat)
+plugins=(git aliases brew bun colored-man-pages colorize composer dnf docker docker-compose fzf git-commit history jsontools kitty laravel laravel5 node npm nvm perl pipenv python pylint pyenv rsync safe-paste sublime symfony symfony6 systemadmin thefuck themes timer ufw web-search wp-cli zsh-autosuggestions zsh-syntax-highlighting zsh-bat)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -187,3 +187,9 @@ NEWLINE=$'\n'
 
 #Custom scripts
 source ~/.config/zsh/custom/dashboard.zfunc
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
