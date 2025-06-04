@@ -9,7 +9,7 @@ My curated collection of Linux tools, scripts, and configurations to streamline 
 
 This repository contains:
 
-- **Configuration files** for tools like `zsh`, `oh my zosh`, `Docker`, `Prometheus`, and more as I learn
+- **Configuration files** for tools like `zsh`, `oh my zsh`, `Docker`, `Prometheus`, and more as I learn
 - **Custom scripts** for automation, troubleshooting, and monitoring
 - **Essential Linux tools** for system administration and DevOps workflows
 
