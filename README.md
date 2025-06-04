@@ -43,7 +43,7 @@ This repository contains:
 ## Steps
 
 #### ZSH
-1. [Install ZSH & dependancies](https://github.com/ohmyzsh/ohmyzsh/wiki/Installing-ZSH])
+1. [Install ZSH & dependancies](https://github.com/ohmyzsh/ohmyzsh/wiki/Installing-ZSH)
 2. **Clone the repo**:
    ```bash
       git clone https://github.com/kevinboudreault/linux-tools.git
