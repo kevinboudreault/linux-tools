@@ -61,3 +61,6 @@ export MANPAGER="less -R --use-color -Dd+r -Du+b" # colored man pages
 #export LESS_TERMCAP_se="$(printf '%b' '[0m')"
 #export LESS_TERMCAP_us="$(printf '%b' '[1;32m')"
 #export LESS_TERMCAP_ue="$(printf '%b' '[0m')"
+
+export NVM_DIR=~/.nvm
+ [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
