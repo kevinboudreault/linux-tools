@@ -4,17 +4,28 @@ My curated collection of Linux tools, scripts, and configurations to streamline 
 
 ---
 
+
 ## Overview
 
 This repository contains:
 
-- **Essential Linux tools** for system administration and DevOps workflows
+- **Configuration files** for tools like `zsh`, `oh my zosh`, `Docker`, `Prometheus`, and more as I learn
 - **Custom scripts** for automation, troubleshooting, and monitoring
-- **Configuration files** for tools like `zsh`, `oh my zosh`, `Docker`, `Prometheus`, and more
+- **Essential Linux tools** for system administration and DevOps workflows
 
 ---
 
+
 ## Tools & Scripts
+
+### Configuration Management
+- **`~/.config/`**: Local configuration
+- **`/etc/caddy/`**: Custom Caddy setups
+- **`/etc/profile.d/`**: Custom environment variables
+
+### Containerization
+- **`docker compose`**: Multi-container applications
+- **`crictl`**: Debug container runtime issues
 
 ### System Monitoring
 - **Prometheus + Grafana**: Setup for real-time system metrics
@@ -26,17 +37,15 @@ This repository contains:
 - **`strace` / `ltrace`**: Trace system calls and library calls
 - **`journalctl`**: Debug systemd services and logs
 
-### Containerization
-- **Docker Compose**: Multi-container applications
-- **`crictl`**: Debug container runtime issues
-
-### Configuration Management
-- **`~/.config/`**: Local configuration
-- **`/etc/caddy/`**: Custom Caddy setups
-- - **`/etc/profile.d/`**: Custom environment variables
+---
 
 
-### Steps
-1. **Clone the repo**:
+## Steps
+
+#### ZSH
+1. (Install ZSH & dependancies)[https://github.com/ohmyzsh/ohmyzsh/wiki/Installing-ZSH]
+2. **Clone the repo**:
    ```bash
-   git clone https://github.com/kevinboudreault/linux-tools.git
+      git clone https://github.com/kevinboudreault/linux-tools.git
+   ```
+
