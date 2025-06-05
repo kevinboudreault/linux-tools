@@ -1,0 +1,15 @@
+#!/bin/zsh
+
+function dockerNumbCount(){
+        STATUS=${1:="running"}
+        echo $(docker ps --filter "status=${STATUS}" --format '{{.ID}}' | wc -l)
+}
+
+function dockerStatus(){
+	CONTSTATUS=${1:="running"}
+	CONTCOUNT=$(dockerNumbCount ${CONTSTATUS})
+
+	echo "====[ $CONTSTATUS # $CONTCOUNT ]====\n"
+	docker ps --filter "status=${CONTSTATUS}" --format "[{{.ID}}] {{.Names}} : ({{.Status}}) {{.Ports}}"
+	echo -e "\n\n"
+}

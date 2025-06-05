@@ -186,7 +186,7 @@ NEWLINE=$'\n'
 # source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 #Custom scripts
-source ~/.config/zsh/custom/dashboard.zfunc
+source ~/.config/zsh/custom/*.zfunc
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
