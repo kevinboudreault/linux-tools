@@ -11,6 +11,8 @@ function checkHDSpace(){
 	echo -e "\n\n"
 }
 
+checkHDSpace
+
 #Docker check
 function dockerNumbCount(){
         STATUS=${1:="running"}
@@ -26,6 +28,8 @@ function dockerStatus(){
 	echo -e "\n\n"
 }
 
-checkHDSpace
-dockerStatus "exited"
-dockerStatus
+#if (! docker stats --no-stream &> /dev/null); then # docker stats may hand if OS is in power saving mode
+if (curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null); then
+	dockerStatus "exited"
+	dockerStatus
+fi
