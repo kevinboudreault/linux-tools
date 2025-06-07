@@ -12,8 +12,3 @@ function checkHDSpace(){
 }
 
 checkHDSpace
-
-if (curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null); then
-       dockerStatus "exited"
-       dockerStatus
-fi
