@@ -13,3 +13,8 @@ function dockerStatus(){
 	docker ps --filter "status=${CONTSTATUS}" --format "[{{.ID}}] {{.Names}} : ({{.Status}}) {{.Ports}}"
 	echo -e "\n\n"
 }
+
+if (curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null); then
+       dockerStatus "exited"
+       dockerStatus
+fi
