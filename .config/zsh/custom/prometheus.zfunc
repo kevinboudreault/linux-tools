@@ -1,0 +1,3 @@
+#!/bin/zsh
+
+alias pmtreload="curl -X POST localhost:9090/-/reload"
