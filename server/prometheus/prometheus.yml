@@ -6,5 +6,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
   - job_name: 'node'
+    scrape_interval: 2m
+    scrape_timeout: 1m
     static_configs:
-      - targets: ['192.168.0.44:9100']
+      - targets: ['172.27.0.2:9100']
+    tls_config:
+      insecure_skip_verify: true
