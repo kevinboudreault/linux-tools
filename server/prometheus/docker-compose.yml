@@ -18,6 +18,9 @@ services:
     container_name: node_exporter
     command:
       - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points="^/(sys|proc|dev|host|etc)($$|/)"'
     ports:
       - 9100:9100
     pid: host
@@ -45,6 +48,21 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
     networks:
       - host-monitor
+#    depends_on:
+#      - cadvisor
+
+#  cadvisor:
+#    image: gcr.io/cadvisor/cadvisor:latest
+#    container_name: cadvisor
+#    ports:
+#      - 8088:8080
+#    volumes:
+#      - /:/rootfs:ro
+#      - /var/run:/var/run:rw
+#      - /sys:/sys:ro
+#      - /var/lib/docker/:/var/lib/docker:ro
+#    networks:
+#      - host-monitor
 
   grafana:
     image: grafana/grafana:latest
