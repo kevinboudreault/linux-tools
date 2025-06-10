@@ -9,7 +9,7 @@ My curated collection of Linux tools, scripts, and configurations to streamline 
 
 This repository contains:
 
-- **Configuration files** for tools like `zsh`, `oh my zsh`, `Docker`, `Prometheus`, and more as I learn
+- **Configuration files** for tools like `zsh`, `oh my zsh`, `Docker`, `Prometheus`, `Grafana` and more as I learn
 - **Custom scripts** for automation, troubleshooting, and monitoring
 - **Essential Linux tools** for system administration and DevOps workflows
 
@@ -28,14 +28,14 @@ This repository contains:
 - **`crictl`**: Debug container runtime issues
 
 ### System Monitoring
-- **Prometheus + Grafana**: Setup for real-time system metrics
-- **Nagios**: Custom checks for server health
-- **Netdata**: Lightweight real-time performance dashboard
+- **`Prometheus & Grafana`**: Setup for real-time system metrics
+- **`Loki`**: System logs aggregation
+- **`Nagios`**: Custom checks for server health
+- **`Netdata`**: Lightweight real-time performance dashboard
 
 ### Debugging & Troubleshooting
 - **`tcpdump` + `Wireshark`**: Network analysis tools
 - **`strace` / `ltrace`**: Trace system calls and library calls
-- **`journalctl`**: Debug systemd services and logs
 
 ---
 
@@ -48,4 +48,3 @@ This repository contains:
    ```bash
       git clone https://github.com/kevinboudreault/linux-tools.git
    ```
-
