@@ -1,0 +1,25 @@
+volumes:
+  loki-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /home/zero/server/loki/loki-data
+
+networks:
+  prometheus_host-monitor:
+    external: true
+
+services:
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3101:3100"
+    volumes:
+      - ./config/loki-config.yml:/etc/loki/config.yaml:ro
+      - loki-data:/loki:rw
+    command: -config.file=/etc/loki/config.yaml
+    restart: unless-stopped
+    networks:
+      - prometheus_host-monitor
