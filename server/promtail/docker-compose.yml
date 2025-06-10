@@ -1,0 +1,27 @@
+volumes:
+  promtail-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /home/zero/server/promtail/data
+
+networks:
+  prometheus_host-monitor:
+    external: true
+
+services:
+  promtail:
+    image: docker.io/grafana/promtail:latest
+    container_name: promtail
+    command: "-config.file=/mnt/config/config.yaml"
+    ports:
+      - "3102:9080"
+    volumes:
+      - ./config/promtail-config.yml:/mnt/config/config.yaml:ro
+      - promtail-data:/promtail:rw
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers
+    restart: unless-stopped
+    networks:
+      - prometheus_host-monitor
