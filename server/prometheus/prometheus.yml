@@ -12,3 +12,10 @@ scrape_configs:
       - targets: ['172.27.0.2:9100']
     tls_config:
       insecure_skip_verify: true
+  - job_name: 'loki'
+    scrape_interval: 2m
+    scrape_timeout: 1m
+    static_configs:
+      - targets: ['172.27.0.5:3101']
+    tls_config:
+      insecure_skip_verify: true
