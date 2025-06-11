@@ -1,0 +1,3 @@
+#!/bin/zsh
+
+alias dk_endpoint="docker context inspect --format '{{ .Endpoints.docker.Host }}'"

@@ -70,12 +70,12 @@ ZSH_THEME="duellj"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git aliases brew bun colored-man-pages colorize composer dnf docker docker-compose fzf git-commit history jsontools kitty laravel laravel5 node npm nvm perl pipenv python pylint pyenv rsync safe-paste sublime symfony symfony6 systemadmin thefuck themes timer ufw web-search wp-cli zsh-autosuggestions zsh-syntax-highlighting zsh-bat)
+plugins=(git aliases brew bun colored-man-pages colorize composer dnf docker docker-compose fzf git-commit history jsontools kitty laravel laravel5 node npm nvm perl pipenv python pylint pyenv rsync safe-paste sublime symfony symfony6 systemadmin thefuck themes timer ufw web-search wp-cli zsh-autosuggestions zsh-docker-aliases zsh-syntax-highlighting zsh-bat)
 
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
-
+source ~/.zprofile
 # export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
