@@ -26,3 +26,12 @@ scrape_configs:
       - targets: ['172.27.0.6:3102']
     tls_config:
       insecure_skip_verify: true
+  - job_name: 'cadvisor'
+    scrape_interval: 1m
+    scrape_timeout: 30s 
+    static_configs:
+      - targets: ['172.27.0.7:8080']
+        labels:
+          group: 'cadvisor'
+    tls_config:
+      insecure_skip_verify: true

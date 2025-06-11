@@ -1,0 +1,30 @@
+volumes:
+  cadvisor-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /home/zero/server/cadvisor/data
+
+networks:
+  prometheus_host-monitor:
+    external: true
+
+services:
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - 8087:8080
+    volumes:
+      - /:/rootfs:ro
+      - /run:/run:ro
+      - /sys:/sys:ro
+      - /home/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    restart: unless-stopped
+    networks:
+      - prometheus_host-monitor
