@@ -64,3 +64,5 @@ export MANPAGER="less -R --use-color -Dd+r -Du+b" # colored man pages
 
 export NVM_DIR=~/.nvm
  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+export DOCKER_HOST="unix:///var/run/docker.sock"
