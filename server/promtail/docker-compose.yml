@@ -21,7 +21,8 @@ services:
       - ./config/promtail-config.yml:/mnt/config/config.yaml:ro
       - promtail-data:/promtail:rw
       - /var/log:/var/log:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers
+      - /home/docker/containers:/var/lib/docker/containers
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
       - prometheus_host-monitor
