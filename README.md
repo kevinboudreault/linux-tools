@@ -30,6 +30,8 @@ This repository contains:
 ### System Monitoring
 - **`Prometheus & Grafana`**: Setup for real-time system metrics
 - **`Loki`**: System logs aggregation
+- **`Promtail`**: System logs scrapper
+- **`cAdvisor`**: Continuous Containers monitoring
 - **`Nagios`**: Custom checks for server health
 - **`Netdata`**: Lightweight real-time performance dashboard
 
