@@ -19,3 +19,10 @@ scrape_configs:
       - targets: ['172.27.0.5:3101']
     tls_config:
       insecure_skip_verify: true
+  - job_name: 'promtail'
+    scrape_interval: 2m
+    scrape_timeout: 1m
+    static_configs:
+      - targets: ['172.27.0.6:3102']
+    tls_config:
+      insecure_skip_verify: true
