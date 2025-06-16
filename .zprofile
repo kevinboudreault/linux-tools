@@ -66,3 +66,6 @@ export NVM_DIR=~/.nvm
  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 export DOCKER_HOST="unix:///var/run/docker.sock"
+
+source ~/dev.env
+export PATH="/Applications/Sublime Text.app/Contents/SharedSupport/bin:$PATH"
