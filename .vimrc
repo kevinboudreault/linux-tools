@@ -17,4 +17,5 @@ if filereadable(expand("~/.vimrc.plug"))
     source ~/.vimrc.plug
 endif
 
-
+filetype plugin on
+syntax on
