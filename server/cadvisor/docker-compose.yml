@@ -16,15 +16,29 @@ services:
     container_name: cadvisor
     ports:
       - 8087:8080
+    command:
+      - "--housekeeping_interval=30s"
+      - "--docker_only=true"
+      - "--disable_root_cgroup_stats=false"
+      #- "--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,accelerator,hugetlb,referenced_memory,cpu_topology,resctrl"
     volumes:
       - /:/rootfs:ro
       - /run:/run:ro
       - /sys:/sys:ro
       - /home/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/cgroup:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - /etc/localtime:/etc/localtime:ro
     devices:
       - /dev/kmsg
     privileged: true
     restart: unless-stopped
     networks:
       - prometheus_host-monitor
+    healthcheck:
+      test: wget --quiet --tries=1 --spider http://localhost:9102/healthz || exit 1
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
