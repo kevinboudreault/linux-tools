@@ -1,0 +1,11 @@
+services:
+  nagios:
+    image: manios/nagios:latest
+    container_name: nagios_server
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nagios_config:/opt/nagios/etc
+    environment:
+      - NAGIOSADMIN_USER=nagiosadmin
+      - NAGIOSADMIN_PASS=your_secure_password
