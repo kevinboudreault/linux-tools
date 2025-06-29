@@ -20,12 +20,12 @@ This repository contains:
 
 ### Configuration Management
 - **`~/.config/`**: Local configuration
-- **`/etc/caddy/`**: Custom Caddy setups
-- **`/etc/profile.d/`**: Custom environment variables
+- **`/etc/caddy/`**: Custom Caddy setups # Coming Soon
+- **`/etc/profile.d/`**: Custom environment variables # Coming Soon
 
 ### Containerization
 - **`docker compose`**: Multi-container applications
-- **`crictl`**: Debug container runtime issues
+- **`crictl`**: Debug container runtime issues # Coming Soon
 
 ### System Monitoring
 - **`Prometheus & Grafana`**: Setup for real-time system metrics
@@ -36,10 +36,11 @@ This repository contains:
 - **`Netdata`**: Lightweight real-time performance dashboard
 
 ### Debugging & Troubleshooting
-- **`tcpdump` + `Wireshark`**: Network analysis tools
-- **`strace` / `ltrace`**: Trace system calls and library calls
+- **`tcpdump` + `Wireshark`**: Network analysis tools # Coming Soon
+- **`strace` / `ltrace`**: Trace system calls and library calls # Coming Soon
 
 ---
+
 
 
 ## Steps
