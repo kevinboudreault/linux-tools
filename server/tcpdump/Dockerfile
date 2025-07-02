@@ -1,3 +1,5 @@
 FROM alpine:latest
-RUN apk add --no-cache tcpdump
+
+RUN apk update
+RUN apk add -u --no-cache tcpdump
 CMD ["tcpdump", "-i any"]
