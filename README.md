@@ -36,7 +36,8 @@ This repository contains:
 - **`Netdata`**: Lightweight real-time performance dashboard
 
 ### Debugging & Troubleshooting
-- **`tcpdump`**: Network traffic capture
+- **`tcpdump`**: Command-line packet analyzer
+- **`libpcap`**: Network traffic capture
 - **`Wireshark`**: Network analysis # Coming soon
 - **`strace` / `ltrace`**: Trace system calls and library calls # Coming Soon
 
