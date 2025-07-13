@@ -1,0 +1,7 @@
+services:
+  nerdctl:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: nerdctl
+    restart: unless-stopped
