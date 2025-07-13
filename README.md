@@ -25,7 +25,7 @@ This repository contains:
 
 ### Containerization
 - **`docker compose`**: Multi-container applications
-- **`crictl`**: Debug container runtime issues # Coming Soon
+- **`crictl`**: Debug container runtime issues
 
 ### System Monitoring
 - **`Prometheus & Grafana`**: Setup for real-time system metrics
