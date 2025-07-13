@@ -1,0 +1,9 @@
+services:
+  wireshark:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: wireshark
+    ports:
+      - "51820:51820"
+    restart: unless-stopped
