@@ -38,7 +38,7 @@ This repository contains:
 ### Debugging & Troubleshooting
 - **`tcpdump`**: Command-line packet analyzer
 - **`libpcap`**: Network traffic capture
-- **`Wireshark`**: Network analysis # Coming soon
+- **`Wireshark`**: Network analysis
 - **`strace` / `ltrace`**: Trace system calls and library calls # Coming Soon
 
 ---
