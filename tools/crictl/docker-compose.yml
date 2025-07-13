@@ -1,0 +1,7 @@
+services:
+  crictl:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: crictl
+    restart: unless-stopped
