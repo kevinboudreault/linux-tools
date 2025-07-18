@@ -1,0 +1,9 @@
+services:
+  tracer:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
