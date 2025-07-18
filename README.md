@@ -39,7 +39,7 @@ This repository contains:
 - **`tcpdump`**: Command-line packet analyzer
 - **`libpcap`**: Network traffic capture
 - **`Wireshark`**: Network analysis
-- **`strace` / `ltrace`**: Trace system calls and library calls # Coming Soon
+- **`strace` / `ltrace`**: Trace system calls and library calls
 
 ---
 
