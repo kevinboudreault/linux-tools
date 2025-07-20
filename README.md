@@ -20,7 +20,7 @@ This repository contains:
 
 ### Configuration Management
 - **`~/.config/`**: Local configuration
-- **`/etc/caddy/`**: Custom Caddy setups # Coming Soon
+- **`/etc/caddy/`**: Custom Caddy setups
 - **`/etc/profile.d/`**: Custom environment variables # Coming Soon
 
 ### Containerization
