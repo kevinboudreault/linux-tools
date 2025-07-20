@@ -1,0 +1,16 @@
+domain.name {
+	reverse_proxy local_dns_name:port {
+		header_up Host {host}
+	    header_up X-Real-IP {remote_host}
+	    header_up X-Forwarded-For {remote_host}
+	    header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output file /var/lib/caddy/logs/domain.name.access.log
+	}
+
+	tls acmeaccount@email.com {
+		protocols tls1.2 tls1.3
+	}
+}
