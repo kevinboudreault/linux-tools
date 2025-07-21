@@ -21,7 +21,7 @@ This repository contains:
 ### Configuration Management
 - **`~/.config/`**: Local configuration
 - **`/etc/caddy/`**: Custom Caddy setups
-- **`/etc/profile.d/`**: Custom environment variables # Coming Soon
+- **`/etc/profile.d/`**: Custom environment variables
 
 ### Containerization
 - **`docker compose`**: Multi-container applications
