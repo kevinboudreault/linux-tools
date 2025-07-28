@@ -66,3 +66,4 @@ This repository contains:
 - HAproxy config
 - Traefik config
 - PiHole config
+- Backup solution + config
