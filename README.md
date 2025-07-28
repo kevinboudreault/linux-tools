@@ -1,6 +1,6 @@
 # Linux Tools Configuration for SysAdmin & DevOps 🛠️
 
-My curated collection of Linux tools, scripts, and configurations to streamline my daily sysadmin and DevOps tasks, troubleshooting, and system management. This repo serves as a centralized hub for automation, monitoring, and efficiency in Linux environments.
+My curated collection of Linux tools, scripts, and configurations to streamline my daily sysadmin and DevOps tasks, troubleshooting, and Linux system management. This repo serves as a centralized hub for automation, monitoring, and efficiency in Linux environments. 
 
 ---
 
@@ -53,3 +53,5 @@ This repository contains:
    ```bash
       git clone https://github.com/kevinboudreault/linux-tools.git
    ```
+
+
