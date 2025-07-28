@@ -54,4 +54,15 @@ This repository contains:
       git clone https://github.com/kevinboudreault/linux-tools.git
    ```
 
+---
 
+
+
+## Coming Soon
+
+- Examples for each section for use/teaching
+- Base Bash/Zsh/Fish scripts for monitoring and debugging
+- Docker swarms orchestration configs
+- HAproxy config
+- Traefik config
+- PiHole config
