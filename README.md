@@ -67,3 +67,4 @@ This repository contains:
 - Traefik config
 - PiHole config
 - Backup solution + config
+- Raspberry Pi config & tools
