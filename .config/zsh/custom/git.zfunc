@@ -1,1 +1,3 @@
+#!/bin/zsh
+
 alias gitcp='f() { git checkout main && git pull $1 };f'
