@@ -1,18 +1,46 @@
-#!/bin/zsh
- 
+#!/usr/bin/env zsh
+# extract_env.sh - Extract environment variable names from docker-compose YAML
+# Usage: ./extract_env.sh <file> [output_file]
+# If no output file is provided, stdout is used.
+
 extract_env() {
-    # Check if an argument is provided and if the file exists
-    if [[ -z "$1" ]]; then
-        echo "Usage: extract_env <filename>"
-        return 1
-    elif [[ ! -f "$1" ]]; then
-        echo "Error: File '$1' not found."
-        return 1
+    set -euo pipefail # Fail on error, undefined vars, pipe failures
+
+    # --- Argument Parsing ---
+    if [[ $# -lt 1 ]]; then
+        echo "Error: Usage: $0 <docker_compose_file> [output_file]" >&2
+        echo "Example: $0 docker-compose.yml" >&2
+        exit 1
     fi
 
-    # Determine destination: $2 if provided, otherwise standard output
-    local dest="${2:-/dev/stdout}"
+    INPUT_FILE="$1"
+    DEST_FILE="${2:-}" # Default to stdout if no second arg
 
-    # Extract keys using yq
-    yq eval '.services[].environment[]' "$1" | cut -d '=' -f 1 | sort -u > "$dest"
+    # --- Validation ---
+    # Check if yq is installed (using which for cross-platform consistency with bash/zsh)
+    # If false: provide how to fix it
+    if ! command -v yq &> /dev/null; then
+        echo "Error: The 'yq' tool is required but not installed." >&2
+        echo "Please install yq: https://github.com/mikefarah/yq" >&2
+        exit 1
+    fi
+
+    # Check if input file exists and is readable
+    if [[ ! -f "$INPUT_FILE" ]]; then
+        echo "Error: Input file '$INPUT_FILE' does not exist." >&2
+        exit 1
+    fi
+
+    if [[ ! -r "$INPUT_FILE" ]]; then
+        echo "Error: Input file '$INPUT_FILE' is not readable." >&2
+        exit 1
+    fi
+
+    # --- Extraction Logic ---
+    # We use yq to safely select the strings containing '=' and split them.
+    # 'select(type == "string")' ensures we only process key=value strings, not keys alone.
+    # 'split("=")[0]' extracts the key. 'null' handles cases where no split occurs safely.
+    yq eval 'select(.services[].environment[]) | .[] | split("=")[0]' "$INPUT_FILE" 2>/dev/null | \
+        grep -v '^$' | \
+        sort -u > "$DEST_FILE"
 }
