@@ -2,7 +2,7 @@
 
 # Script to clean up disk space
 
-clean_disk() {
+disk_cleanup() {
     LOG_DIR="/var/log"
     USER_CACHE="$HOME/.cache"
     LOGS_MAX_SIZE="100M"

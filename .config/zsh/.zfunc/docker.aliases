@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 
 alias dk_endpoint="docker context inspect --format '{{ .Endpoints.docker.Host }}'"
 alias dk_upd="docker compose up -d"

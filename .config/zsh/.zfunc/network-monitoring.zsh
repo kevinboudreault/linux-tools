@@ -67,7 +67,7 @@ rotate_log() {
 }
 
 # Main Monitoring Loop
-main_loop() {
+network-monitoring() {
     local prev_state=""
     
     while true; do
@@ -142,5 +142,3 @@ main_loop() {
         sleep "$UPDATE_INTERVAL"
     done
 }
-
-main_loop
