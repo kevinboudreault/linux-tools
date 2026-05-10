@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 
 function dk_ctnr_count(){
         STATUS=${1:="running"}
