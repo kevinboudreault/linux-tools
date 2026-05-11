@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+function dashboard(){
+	# Machine and timestamp
+	echo "Hostname: $(hostname)"
+  	echo "Time:     $(date)"
+	
+	#HD space left
+	echo "==={ HD }===\n"
+	df -h | grep /dev
+	echo -e "\n\n"
+}
