@@ -2,7 +2,7 @@
 # extract_env.sh - Extract environment variable names from docker-compose YAML
 # Usage: ./extract_env.sh <file> [output_file]
 # If no output file is provided, stdout is used.
-
+# Using "set +e" to prevent terminal session closing on error
 extract_env() {
     set -euo pipefail # Fail on error, undefined vars, pipe failures
 
@@ -10,7 +10,8 @@ extract_env() {
     if [[ $# -lt 1 ]]; then
         echo "Error: Usage: $0 <docker_compose_file> [output_file]" >&2
         echo "Example: $0 docker-compose.yml" >&2
-        exit 1
+        set +e
+	return 1
     fi
 
     INPUT_FILE="$1"
@@ -22,18 +23,21 @@ extract_env() {
     if ! command -v yq &> /dev/null; then
         echo "Error: The 'yq' tool is required but not installed." >&2
         echo "Please install yq: https://github.com/mikefarah/yq" >&2
-        exit 1
+        set +e
+	return 1
     fi
 
     # Check if input file exists and is readable
     if [[ ! -f "$INPUT_FILE" ]]; then
         echo "Error: Input file '$INPUT_FILE' does not exist." >&2
-        exit 1
+        set +e
+	return 1
     fi
 
     if [[ ! -r "$INPUT_FILE" ]]; then
         echo "Error: Input file '$INPUT_FILE' is not readable." >&2
-        exit 1
+        set +e
+	return 1
     fi
 
     # --- Extraction Logic ---
