@@ -186,6 +186,8 @@ NEWLINE=$'\n'
 # source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 #Custom scripts
+fpath=(~/.config/zsh/.zfunc/ $fpath)
+autoload -Uz ~/.config/zsh/.zfunc/*(:t)
 source ~/.config/zsh/.zfunc/*
 
 #export NVM_DIR="$HOME/.nvm"
