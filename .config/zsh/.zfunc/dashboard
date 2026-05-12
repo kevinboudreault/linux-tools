@@ -7,6 +7,6 @@ function dashboard(){
 	
 	#HD space left
 	echo "==={ HD }===\n"
-	df -h | grep /dev
+	df -h | grep /dev | grep -v "loop"
 	echo -e "\n\n"
 }
