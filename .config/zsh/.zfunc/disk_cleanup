@@ -10,7 +10,7 @@ disk_cleanup() {
     # Check for root privileges for system-wide cleaning
     if [[ $EUID -ne 0 ]]; then
        echo "Please run as root (sudo) to clean system logs and DNF cache."
-       exit 1
+       return 1
     fi
 
     echo "--- Starting Disk Cleanup ---"
