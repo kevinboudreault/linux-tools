@@ -7,6 +7,7 @@ function dashboard(){
 	
 	#HD space left
 	echo "==={ HD }===\n"
-	df -h | grep /dev | grep -v "loop"
+	#df -h | grep /dev | grep -v "loop"
+	df -h -x tmpfs -x squashfs -x devtmpfs
 	echo -e "\n\n"
 }
