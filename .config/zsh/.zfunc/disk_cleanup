@@ -40,6 +40,18 @@ disk_cleanup() {
         rm -rf "$USER_CACHE"/*
     fi
 
+    # 6. Clean old snap packages
+    echo "Clean up old snap packages"
+    snap list --all | awk '/disabled/{print $1, $3}' | xargs -n2 sudo snap remove --revision
+    
+    # 7. Delete old system upgrades
+    echo "Clean up old system upgrades"
+    sudo dnf system-upgrade clean
+
+    # 8. Remove temp files
+    echo "Clean up temporary files"
+    rm -rf /tmp/*
+
     echo "--- Cleanup Complete ---"
     echo ""
     echo "--- Root Disk Space ---"
