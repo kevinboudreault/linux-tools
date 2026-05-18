@@ -1,0 +1,31 @@
+#!/bin/zsh
+
+clamav-report(){
+
+	# Define services to check
+	SERVICES=("clamav-daemon" "clamav-freshclam")
+
+	echo "--- ClamAV Status Report ---"
+
+	# Check systemd service status
+	for svc in $SERVICES; do
+    		if systemctl is-active --quiet "$svc"; then
+        		echo "[ACTIVE] $svc is running."
+    		else
+        		echo "[INACTIVE] $svc is NOT running."
+    		fi
+	done
+
+	# Check ClamAV version and database info
+	echo -n "Version Info: "
+	clamscan --version 2>/dev/null || echo "ClamAV not installed or not in PATH."
+
+	# Check the last update in the log file
+	LOG_FILE="/var/log/clamav/freshclam.log"
+	if [[ -f "$LOG_FILE" ]]; then
+    		echo -n "Last Update Activity: "
+    		grep "Update process started" "$LOG_FILE" | tail -n 1
+	else
+    		echo "Freshclam log not found at $LOG_FILE"
+	fi
+}
