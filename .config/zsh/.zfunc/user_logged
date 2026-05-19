@@ -1,0 +1,16 @@
+#!/usr/bin/env zsh
+
+user_logged(){
+    # Process the output of 'last'
+    # Keep only the first occurrence of each user (their most recent login)
+    last | awk '
+        # Skip system pseudo-users, empty lines, and the final wtmp log line
+        $1 ~ /^(reboot|shutdown|wtmp|$)/ {next}
+        
+        # If we have not seen this user yet, print their name and login details
+        !seen[$1]++ {
+            # Prints username, day of week, month, day, and time
+            print $1 "\t" $3 " " $4 " " $5 " " $6
+        }
+    '
+}
