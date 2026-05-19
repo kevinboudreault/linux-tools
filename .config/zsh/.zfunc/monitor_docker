@@ -1,0 +1,46 @@
+#!/usr/bin/env zsh
+
+# Script: monitor_docker
+# Monitors a target Docker container using a passed argument
+
+monitor_docker() {
+    # Ensure a container name was provided
+    if [[ -z "$1" ]]; then
+        echo "Usage: monitor_docker <container_name> [interval_seconds]"
+        return 1
+    fi
+
+    local CONTAINER_NAME="$1"
+    local INTERVAL="${2:-10}" # Defaults to 10 seconds if not provided
+
+    echo "Starting monitoring for container: $CONTAINER_NAME (Interval: ${INTERVAL}s)"
+    echo "Press Ctrl+C to stop."
+
+    while true; do
+        # 1. Check if container exists and is running
+        local RUNNING=$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)
+
+        if [[ "$RUNNING" != "true" ]]; then
+            echo "[$(date)] ALARM: Container '$CONTAINER_NAME' is not running."
+            sleep $INTERVAL
+            continue
+        fi
+
+        # 2. Get the container's primary IPv4 Address
+        local CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER_NAME" 2>/dev/null)
+
+        if [[ -z "$CONTAINER_IP" ]]; then
+            echo "[$(date)] ALARM: Failed to retrieve IP for '$CONTAINER_NAME'."
+        else
+            # 3. Test connectivity using ping
+            ping -c 1 -W 2 "$CONTAINER_IP" &> /dev/null
+            if [[ $? -eq 0 ]]; then
+                echo "[$(date)] OK: '$CONTAINER_NAME' is reachable at $CONTAINER_IP"
+            else
+                echo "[$(date)] ALARM: '$CONTAINER_NAME' is running but network is unreachable (IP: $CONTAINER_IP)."
+            fi
+        fi
+
+        sleep $INTERVAL
+    done
+}
