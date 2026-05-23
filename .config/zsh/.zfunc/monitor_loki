@@ -1,0 +1,83 @@
+#!/usr/bin/env zsh
+
+# ==========================================
+# Zsh Loki Container Monitor
+# ==========================================
+
+# Function to monitor a Loki Docker container
+# Autoloaded via ~/.zshrc
+
+monitor_loki() {
+    # Configuration
+    local CONTAINER_NAME="loki"
+    local LOKI_URL="http://localhost:3100"
+
+    # Colors for scannability
+    local RED='\033[0;31m'
+    local GREEN='\033[0;32m'
+    local YELLOW='\033[0;33m'
+    local BLUE='\033[0;34m'
+    local NC='\033[0m'
+
+    echo "${BLUE}=== Loki Monitoring Script ===${NC}"
+
+    # 1. Check if container exists and is running
+    if ! docker ps --format '{{.Names}}' | grep -qw "$CONTAINER_NAME"; then
+        echo "${RED}[ERROR] Container '$CONTAINER_NAME' is not running.${NC}"
+        echo "Attempting to start it..."
+        docker start "$CONTAINER_NAME" > /dev/null
+        
+        if [ $? -eq 0 ]; then
+            echo "${GREEN}[SUCCESS] Container started successfully.${NC}"
+        else
+            echo "${RED}[CRITICAL] Failed to start container. Check 'docker logs $CONTAINER_NAME'.${NC}"
+            return 1
+        fi
+    fi
+
+    # 2. Container stats (CPU & Memory)
+    echo "\n${BLUE}--- Container Stats ---${NC}"
+    docker stats "$CONTAINER_NAME" --no-stream --format "CPU: {{.CPUPerc}} | Memory: {{.MemUsage}}"
+
+    # 3. Check Loki Ready/Live endpoint
+    echo "\n${BLUE}--- Loki API Status ---${NC}"
+    local READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$LOKI_URL/ready")
+    if [ "$READY_STATUS" -eq 200 ]; then
+        echo "${GREEN}[OK] Loki /ready endpoint responded with 200 OK${NC}"
+    else
+        echo "${YELLOW}[WARNING] Loki /ready endpoint returned HTTP $READY_STATUS (Loki might still be initializing)${NC}"
+    fi
+
+    # 4. Check Log Ingestion
+    echo "\n${BLUE}--- Log Ingestion Check ---${NC}"
+    local NOW=$(date +%s)
+    local START_TIME=$((NOW - 3600))
+    local END_TIME=$NOW
+
+    echo "Querying Loki API for ingestion activity in the last hour..."
+
+    local LOKI_LOG_COUNT=0
+    if command -v jq &> /dev/null; then
+        LOKI_LOG_COUNT=$(curl -G -s "$LOKI_URL/loki/api/v1/query_range" \
+            --data-urlencode 'query={job="docker"}' \
+            --data-urlencode "start=${START_TIME}000000000" \
+            --data-urlencode "end=${END_TIME}000000000" \
+            --data-urlencode 'limit=1' | jq '.data.result | length')
+    else
+        LOKI_LOG_COUNT=$(curl -G -s "$LOKI_URL/loki/api/v1/query_range" \
+            --data-urlencode 'query={job="docker"}' \
+            --data-urlencode "start=${START_TIME}000000000" \
+            --data-urlencode "end=${END_TIME}000000000" \
+            --data-urlencode 'limit=1' | grep -o '"values":\[\[[^\]]*\]\]' | wc -l)
+    fi
+
+    if [ "$LOKI_LOG_COUNT" -gt 0 ]; then
+        echo "${GREEN}[OK] Logs are actively being ingested into Loki.${NC}"
+    else
+        echo "${YELLOW}[WARNING] No logs returned for the query {job=\"docker\"} in the last hour.${NC}"
+        echo "Please ensure your Promtail or Grafana Alloy agent is correctly configured."
+    fi
+
+    echo "\n${BLUE}=== Monitoring Complete ===${NC}"
+}
+
