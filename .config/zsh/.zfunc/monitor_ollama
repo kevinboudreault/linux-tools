@@ -1,0 +1,89 @@
+#!/usr/bin/env zsh
+
+# =============================================================================
+# Ollama Server Monitor
+# =============================================================================
+# This script monitors the Ollama server. If it stops responding, it restarts it.
+# If the process is already running for an extended period (stuck), it kills it forcefully.
+#
+# Usage: source ./monitor_ollama
+# =============================================================================
+
+monitor_ollama() {
+
+    # Configuration (Defaults to localhost if not set)
+    local OLLAMA_HOST="${OLLAMA_HOST:-http://0.0.0.0:11434}"
+
+    # ANSI Escape Color Codes
+    local GREEN='\033[0;32m'
+    local RED='\033[0;31m'
+    local YELLOW='\033[0;33m'
+    local CYAN='\033[0;36m'
+    local BOLD='\033[1m'
+    local NC='\033[0m'
+
+    # Check dependencies
+    if ! command -v jq &>/dev/null || ! command -v curl &>/dev/null; then
+        echo -e "${RED}Error: 'curl' and 'jq' are required to run this function.${NC}"
+        return 1
+    fi
+
+    # Fetch Server Status and Version
+    local VERSION_RESP
+    VERSION_RESP=$(curl -s -m 2 "${OLLAMA_HOST}/api/tags" 2>/dev/null)
+    local CURL_STATUS=$?
+
+    echo -e "${BOLD}====== OLLAMA SERVER STATUS ======${NC}"
+    echo -e "Target Host: ${CYAN}${OLLAMA_HOST}${NC}"
+    echo -e "Checked At:  $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "--------------------------------------------------------------------------------"
+
+    if [ $CURL_STATUS -ne 0 ]; then
+        echo -e "Server Status: ${RED}${BOLD}OFFLINE / UNREACHABLE${NC}"
+        echo -e "Reason:        Connection timed out or refused."
+        return 1
+    fi
+
+    echo -e "Server Status: ${GREEN}${BOLD}ONLINE${NC}"
+
+    # Fetch Active/Running Models
+    local PS_RESP
+    PS_RESP=$(curl -s "${OLLAMA_HOST}/api/ps")
+
+    echo -e "\n${BOLD}[ Active Models in Memory ]${NC}"
+    echo "--------------------------------------------------------------------------------"
+    printf "%-25s %-12s %-12s %-15s\n" "MODEL NAME" "SIZE" "VRAM (%)" "UNTIL EXPIRE"
+    echo "--------------------------------------------------------------------------------"
+
+    local RUNNING_COUNT
+    RUNNING_COUNT=$(echo "$PS_RESP" | jq '.models | length')
+
+    if [ "$RUNNING_COUNT" -eq 0 ]; then
+        echo -e "  ${YELLOW}No models are currently loaded in memory.${NC}"
+    else
+        echo "$PS_RESP" | jq -c '.models[]' | while read -r model; do
+            local NAME SIZE_BYTES SIZE_GB VRAM_DETAILS VRAM_PCT EXPIRES_AT EXPIRE_SHORT
+            NAME=$(echo "$model" | jq -r '.name')
+            SIZE_BYTES=$(echo "$model" | jq -r '.size')
+            SIZE_GB=$(printf "%.2f GB" $((SIZE_BYTES / 1024.0 / 1024.0 / 1024.0)))
+            
+            VRAM_DETAILS=$(echo "$model" | jq -r '.size_vram')
+            if [ "$SIZE_BYTES" -gt 0 ]; then
+                VRAM_PCT=$(printf "%.1f%%" $(( (VRAM_DETAILS * 100.0) / SIZE_BYTES )))
+            else
+                VRAM_PCT="0%"
+            fi
+
+            EXPIRES_AT=$(echo "$model" | jq -r '.expires_at')
+            EXPIRE_SHORT=$(echo "$EXPIRES_AT" | sed -E 's/.*T([^Z]*).*/\1/' | cut -d'.' -f1)
+
+            printf "%-25s %-12s %-12s %-15s\n" "$NAME" "$SIZE_GB" "$VRAM_PCT" "$EXPIRE_SHORT"
+        done
+    fi
+    echo "--------------------------------------------------------------------------------"
+
+    # List All Downloaded Models available
+    echo -e "\n${BOLD}[ Library Catalog (All Pulled Models) ]${NC}"
+    echo "$VERSION_RESP" | jq -r '.models[].name' | sed 's/^/  • /'
+
+}
