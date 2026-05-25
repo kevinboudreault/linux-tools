@@ -1,0 +1,60 @@
+#!/usr/bin/env zsh
+
+
+# ==========================================
+# Zsh Check Container Logs
+# ==========================================
+
+check_log() {
+
+    # Enable Zsh internal coloring support
+    autoload -U colors && colors
+
+    # --- CONFIGURATION ---
+    # Default lookback time if not specified (e.g., 10m = 10 minutes, 2h = 2 hours)
+    DEFAULT_SINCE="10m"
+    # Keywords to search for in logs (separated by pipe '|' symbols)
+    KEYWORDS="error|fail|critical|exception|fatal"
+
+    # Ensure the Docker CLI is installed
+    if ! command -v docker &> /dev/null; then
+        print -P "$fg[red][ERROR]$reset_color Docker command line tool not found."
+        exit 1
+    fi
+
+    # Read arguments: 1st is container name, 2nd is optional timeframe
+    CONTAINER_NAME=$1
+    SINCE_TIME=${2:-$DEFAULT_SINCE}
+
+    # Validate that a container name was provided
+    if [[ -z "$CONTAINER_NAME" ]]; then
+        print -P "$fg[yellow][USAGE]$reset_color ./check_logs.zsh <container_name> [timeframe]"
+        print -P "Example: ./check_logs.zsh my_web_app 30m"
+        exit 1
+    fi
+
+    # Verify if the specified container actually exists
+    if ! docker ps -a --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}$"; then
+        print -P "$fg[red][ERROR]$reset_color Container '$CONTAINER_NAME' does not exist."
+        exit 1
+    fi
+
+    print -P "$fg[cyan]=============================================================$reset_color"
+    print -P "$fg[white][INFO] Scanning logs for '$CONTAINER_NAME' (Last $SINCE_TIME)$reset_color"
+    print -P "$fg[cyan]=============================================================$reset_color"
+
+    # Fetch logs and use grep to match issue keywords (case-insensitive)
+    # We use 'tee' to capture the output so we can verify if issues were found
+    local log_output
+    log_output=$(docker logs --since "$SINCE_TIME" "$CONTAINER_NAME" 2>&1 | grep -Ei "$KEYWORDS")
+
+    if [[ -z "$log_output" ]]; then
+        print -P "$fg[green][OK]$reset_color No critical keywords ($KEYWORDS) found in the last $SINCE_TIME."
+    else
+        print -P "$fg[red][ALERT]$reset_color Found matching issues in the log entries:"
+        print "-------------------------------------------------------------"
+        # Print the logs while highlighting the matched keywords in bold red
+        echo "$log_output" | grep --color=always -Ei "$KEYWORDS"
+        print "-------------------------------------------------------------"
+    fi
+}
