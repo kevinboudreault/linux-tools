@@ -1,0 +1,5 @@
+# Set up a Server tab
+new_tab Server
+cd ~/server/
+layout splits
+title Server
