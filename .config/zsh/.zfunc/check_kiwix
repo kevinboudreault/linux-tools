@@ -1,0 +1,31 @@
+#!/usr/bin/env zsh
+
+check_kiwix() {
+
+	# ==========================================
+	# Zsh Check Kiwix Latest Wikipedia
+	# ==========================================
+
+
+	# The directory containing English Wikipedia ZIM files
+	BASE_URL="https://download.kiwix.org/zim/wikipedia/"
+
+	# Define the specific flavor you want (e.g., all_maxi, all_nopic, etc.)
+	# 'all_maxi' includes everything: text and images.
+	FLAVOR="wikipedia_en_all_maxi"
+
+	print "Checking for the latest version of $FLAVOR..."
+
+	# 1. Fetch the directory page
+	# 2. Extract links matching the flavor
+	# 3. Sort them to find the most recent date in the filename (YYYY-MM format)
+	LATEST_FILE=$(curl -s "$BASE_URL" | grep -oE "${FLAVOR}_[0-9]{4}-[0-9]{2}\.zim" | sort -r | head -n 1)
+
+	if [[ -n "$LATEST_FILE" ]]; then
+		FULL_URL="${BASE_URL}${LATEST_FILE}"
+		print "Latest Version: $LATEST_FILE"
+		print "Download URL:   $FULL_URL"
+	else
+		print "Error: Could not find the latest version. Check your internet connection or flavor name."
+	fi
+}
