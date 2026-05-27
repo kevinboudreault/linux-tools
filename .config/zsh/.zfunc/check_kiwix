@@ -8,11 +8,11 @@ check_kiwix() {
 
 	
 	# The directory containing English Wikipedia ZIM files
-	local BASE_URL="https://download.kiwix.org/zim/wikipedia/"
+	local BASE_URL="${1:-https://download.kiwix.org/zim/wikipedia/}"
 
 	# Define the specific flavor you want (e.g., all_maxi, all_nopic, etc.)
 	# 'all_maxi' includes everything: text and images.
-	local FLAVOR="wikipedia_en_all_maxi"
+	local FLAVOR="${2:-wikipedia_en_all_maxi}"
 
 	print "Checking for the latest version of $FLAVOR..."
 
