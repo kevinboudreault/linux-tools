@@ -1,12 +1,10 @@
 #!/usr/bin/env zsh
 
-check_kiwix() {
-
-	# ==========================================
-	# Zsh Check Kiwix Latest Wikipedia
-	# ==========================================
-
-	
+# ==========================================
+# Zsh Check Kiwix Latest Wikipedia
+# ==========================================
+ 
+check_kiwix() {	
 	# The directory containing English Wikipedia ZIM files
 	local BASE_URL="${1:-https://download.kiwix.org/zim/wikipedia/}"
 
