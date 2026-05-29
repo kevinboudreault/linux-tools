@@ -1,6 +1,10 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 
-clamav-report(){
+# ================================================
+# Zsh check clamav running service & last update
+# ===============================================
+
+clamav_report(){
 
 	# Define services to check
 	SERVICES=("clamav-daemon" "clamav-freshclam")
