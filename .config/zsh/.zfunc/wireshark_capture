@@ -1,0 +1,85 @@
+#!/usr/bin/env zsh
+
+wireshark_capture() {
+    # Ensure the script is run with root/sudo permissions for packet capture
+    if [[ $EUID -ne 0 ]]; then
+        print -r -- "Error: This function must be run as root. Please use: sudo zsh -c \"autoload -Uz wireshark_capture; wireshark_capture\"" >&2
+        return 1
+    fi
+
+    # Check if tshark is installed
+    if ! command -v tshark &> /dev/null; then
+        print -r -- "Error: tshark (Wireshark CLI) is not installed." >&2
+        return 1
+    fi
+
+    # 1. Interactive Interface Selection
+    print -r -- "Available Network Interfaces:"
+    # Collect interfaces into a Zsh array
+    local -a interfaces
+    interfaces=(${(f)"$(tshark -D | awk '{print $2}')"})
+
+    if [[ ${#interfaces} -eq 0 ]]; then
+        print -r -- "Error: No network interfaces found." >&2
+        return 1
+    fi
+
+    # Loop to display and select the interface
+    local i
+    for i in {1..${#interfaces}}; do
+        printf "  [%d] %s\n" $i "${interfaces[$i]}"
+    done
+
+    print -n "Select an interface number (1-${#interfaces}): "
+    local choice
+    read choice
+
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > ${#interfaces} )); then
+        print -r -- "Error: Invalid selection. Exiting." >&2
+        return 1
+    fi
+
+    local SELECTED_IFACE="${interfaces[$choice]}"
+
+    # 2. Setup Logging Directories
+    local LOG_DIR="${HOME}/Downloads/Wireshark_Captures"
+    mkdir -p "$LOG_DIR"
+    local TIMESTAMP=$(date "+%Y%m%d_%H%M%S")
+    local OUTPUT_FILE="${LOG_DIR}/capture_${TIMESTAMP}.pcapng"
+
+    # 3. Define Capture Parameters
+    local BPF_FILTER="port 53 or port 80 or port 443 or port 22"
+    local PACKET_LIMIT=50
+
+    print -r -- "--------------------------------------------------------"
+    print -r -- "Starting capture on interface: $SELECTED_IFACE"
+    print -r -- "Capturing up to $PACKET_LIMIT packets matching typical web traffic..."
+    print -r -- "Saving raw capture data to: $OUTPUT_FILE"
+    print -r -- "--------------------------------------------------------"
+
+    # Formatted Table Header for Live Output
+    printf "%-10s | %-15s | %-15s | %-8s | %s\n" "Time" "Source IP" "Dest IP" "Protocol" "Info Summary"
+    print -r -- "-----------+-----------------+-----------------+----------+----------------------------------"
+
+    # 4. Live Capture and Analysis Stream
+    local time src dst proto info
+    tshark -i "$SELECTED_IFACE" \
+           -f "$BPF_FILTER" \
+           -c "$PACKET_LIMIT" \
+           -w "$OUTPUT_FILE" \
+           -P -T fields \
+           -e frame.time_relative \
+           -e ip.src \
+           -e ip.dst \
+           -e _ws.col.Protocol \
+           -e _ws.col.Info | while read -r time src dst proto info; do
+        
+        [[ -z "$src" || -z "$dst" ]] && continue
+        printf "%-10.4s | %-15s | %-15s | %-8s | %s\n" "$time" "$src" "$dst" "$proto" "$info"
+    done
+
+    print -r -- "--------------------------------------------------------"
+    print -r -- "Capture Complete!"
+    print -r -- "To view the full graphical decode, run: wireshark $OUTPUT_FILE &"
+    print -r -- "--------------------------------------------------------"
+}
