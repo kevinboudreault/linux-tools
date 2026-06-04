@@ -6,14 +6,14 @@
 check_loki(){
   # --- CONFIGURATION ---
   LOKI_CONTAINER="loki"                # Name of your Loki Docker container
-  LOKI_URL="http://localhost:3100"     # Address of your Loki instance
+  LOKI_URL="http://localhost:3101"     # Address of your Loki instance
   DOCKER_IMAGE="grafana/loki:latest"   # Logcli is embedded in Loki docker images
 
   # --- USAGE ---
   if [ $# -eq 0 ]; then
       echo "Usage: $0 \"<LogQL_Query>\""
       echo "Example: $0 '{job=\"docker\"} |= \"error\"'"
-      exit 1
+      return 1
   fi
 
   QUERY=$1
