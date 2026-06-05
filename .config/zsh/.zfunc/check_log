@@ -19,7 +19,7 @@ check_log() {
     # Ensure the Docker CLI is installed
     if ! command -v docker &> /dev/null; then
         print -P "$fg[red][ERROR]$reset_color Docker command line tool not found."
-        exit 1
+        return 1
     fi
 
     # Read arguments: 1st is container name, 2nd is optional timeframe
@@ -30,13 +30,13 @@ check_log() {
     if [[ -z "$CONTAINER_NAME" ]]; then
         print -P "$fg[yellow][USAGE]$reset_color ./check_logs.zsh <container_name> [timeframe]"
         print -P "Example: ./check_logs.zsh my_web_app 30m"
-        exit 1
+        return 1
     fi
 
     # Verify if the specified container actually exists
     if ! docker ps -a --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}$"; then
         print -P "$fg[red][ERROR]$reset_color Container '$CONTAINER_NAME' does not exist."
-        exit 1
+        return 1
     fi
 
     print -P "$fg[cyan]=============================================================$reset_color"
