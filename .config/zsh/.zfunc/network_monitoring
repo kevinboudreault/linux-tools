@@ -67,7 +67,7 @@ rotate_log() {
 }
 
 # Main Monitoring Loop
-network-monitoring() {
+network_monitoring() {
     local prev_state=""
     
     while true; do
