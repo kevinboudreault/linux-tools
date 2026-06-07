@@ -1,0 +1,121 @@
+#!/usr/bin/env zsh
+
+function laravel() {
+    # --------------------------------------------------------------------------
+    # 1. Core Execution Engine (Handles Sail vs Local PHP)
+    # --------------------------------------------------------------------------
+    _artisan_exec() {
+        if [[ -f "./vendor/bin/sail" && -f "./docker-compose.yml" ]]; then
+            ./vendor/bin/sail artisan "$@"
+        elif [[ -f "artisan" ]]; then
+            php artisan "$@"
+        else
+            echo "Error: No Laravel installation or artisan file found here." >&2
+            return 1
+        fi
+    }
+
+    # --------------------------------------------------------------------------
+    # 2. Command Router
+    # --------------------------------------------------------------------------
+    local sub_cmd="$1"
+    shift 2>/dev/null
+
+    case "$sub_cmd" in
+        # Shorthand Actions
+        pa)   _artisan_exec "$@" ;;
+        pas)  _artisan_exec serve "$@" ;;
+        pat)  _artisan_exec test "$@" ;;
+        pam)  _artisan_exec migrate "$@" ;;
+        pamf) _artisan_exec migrate:fresh --seed "$@" ;;
+
+        # Interactive Component Generator
+        make)
+            if ! [[ -f "artisan" ]]; then
+                echo "Error: You must be in the root directory of a Laravel project."
+                return 1
+            fi
+
+            echo "Choose a component to generate:"
+            echo "1) Model"
+            echo "2) Controller"
+            echo "3) Migration"
+            echo "4) Factory + Seeder"
+            echo "5) Livewire Component"
+            
+            echo -n "Enter choice [1-5]: "
+            read choice
+
+            echo -n "Enter component name (e.g., Post): "
+            read name
+
+            case $choice in
+                1) _artisan_exec make:model "$name" -m ;;
+                2) _artisan_exec make:controller "${name}Controller" ;;
+                3) _artisan_exec make:migration "create_${name:l}_table" ;;
+                4) 
+                   _artisan_exec make:factory "${name}Factory"
+                   _artisan_exec make:seeder "${name}Seeder"
+                   ;;
+                5) _artisan_exec make:livewire "$name" ;;
+                *) echo "Invalid selection" ;;
+            esac
+            ;;
+
+        # Maintenance Optimization
+        clear)
+            echo "Scrubbing Laravel caches..."
+            _artisan_exec optimize:clear
+            _artisan_exec cache:clear
+            _artisan_exec config:clear
+            _artisan_exec route:clear
+            _artisan_exec view:clear
+            
+            if [[ -d "node_modules" ]]; then
+                echo "Found Node environment. Rebuilding assets..."
+                npm run build || npm run dev
+            fi
+            echo "All clean and optimized!"
+            ;;
+
+        # Project Initializer
+        init)
+            if [[ -z "$1" ]]; then
+                echo "Usage: laravel init <project-name>"
+                return 1
+            fi
+
+            echo "Initializing new Laravel application..."
+            composer create-project laravel/laravel "$1"
+            cd "$1" || return
+            
+            echo "Generating app key..."
+            php artisan key:generate
+            
+            echo "Initializing local Git repository..."
+            git init && git add . && git commit -m "Initial Laravel commit"
+            
+            echo "Setup complete! Move into code with: cd $1"
+            ;;
+
+        # Default fallback: Pass unmatched arguments straight to artisan
+        *)
+            if [[ -z "$sub_cmd" ]]; then
+                echo "Laravel Helper Tool"
+                echo "Usage: laravel [command] [options]"
+                echo ""
+                echo "Commands:"
+                echo "  pa      Run raw artisan commands"
+                echo "  pas     Start development server"
+                echo "  pat     Run application tests"
+                echo "  pam     Run database migrations"
+                echo "  pamf    Fresh migration with seeders"
+                echo "  make    Interactive code generator"
+                echo "  clear   Clear all framework caches"
+                echo "  init    Provision a new project"
+                return 0
+            fi
+            _artisan_exec "$sub_cmd" "$@"
+            ;;
+    esac
+}
