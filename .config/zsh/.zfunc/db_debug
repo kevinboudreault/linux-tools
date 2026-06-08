@@ -1,0 +1,88 @@
+#!/usr/bin/env zsh
+
+# Triple-engine database triage function for MS-SQL, PostgreSQL, and MySQL
+db-debug() {
+  case "$1" in
+    -p|--postgres)
+      shift # Remove the flag from arguments
+      local PG_HOST="${PGHOST:-localhost}"
+      local PG_USER="${PGUSER:-postgres}"
+      local PG_DB="${PGDATABASE:-postgres}"
+
+      print -P "%F{magenta}Fetching active, blocked, or long-running PostgreSQL queries...%f"
+
+      local pg_query="
+        SELECT
+            pid AS \"PID\",
+            state AS \"State\",
+            wait_event_type AS \"WaitType\",
+            ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - query_start))::numeric, 2) AS \"Duration_Sec\",
+            usename AS \"User\",
+            substr(query, 1, 60) AS \"QueryText\"
+        FROM pg_stat_activity
+        WHERE state != 'idle' AND pid <> pg_backend_pid();
+      "
+      psql -h "$PG_HOST" -U "$PG_USER" -d "$PG_DB" -c "$pg_query" --expanded
+      ;;
+
+    -m|--mysql)
+      shift # Remove the flag from arguments
+      local MY_HOST="${MYSQL_HOST:-localhost}"
+      local MY_USER="${MYSQL_USER:-root}"
+      local MY_PASS="${MYSQL_PWD}"
+
+      # Request password securely if it isn't set as an environment variable
+      if [[ -z "$MY_PASS" ]]; then
+        print -P "%F{yellow}Enter password for MySQL ($MY_USER@$MY_HOST):%f"
+        read -s MY_PASS
+        export MYSQL_PWD="$MY_PASS" # Temporarily set password context for sub-shell
+      fi
+
+      print -P "%F{green}Fetching active MySQL execution states and locks...%f"
+
+      # MySQL processing query evaluating executing thread queues
+      local my_query="
+        SELECT
+            ID AS 'Thread_ID',
+            USER AS 'User',
+            HOST AS 'Host',
+            DB AS 'Database',
+            COMMAND AS 'Command',
+            TIME AS 'Duration_Sec',
+            STATE AS 'Execution_State',
+            LEFT(INFO, 60) AS 'QueryText'
+        FROM information_schema.processlist
+        WHERE COMMAND != 'Sleep' AND ID != CONNECTION_ID()
+        ORDER BY TIME DESC;
+      "
+      mysql -h "$MY_HOST" -U "$MY_USER" -e "$my_query" --table
+
+      # Clean up password reference from current shell state memory
+      unset MYSQL_PWD
+      ;;
+
+    *)
+      # Fallback default: Microsoft SQL Server Engine
+      local SERVER="${MSSQL_SERVER:-localhost}"
+      local USER="${MSSQL_USER:-sa}"
+      local PASS="${MSSQL_PASS}"
+
+      if [[ -z "$PASS" ]]; then
+        print -P "%F{yellow}Enter password for MS-SQL ($USER@$SERVER):%f"
+        read -s PASS
+      fi
+
+      print -P "%F{cyan}Fetching active MS-SQL queries...%f"
+
+      local mssql_query="
+        SELECT
+            r.session_id AS [SPID], r.status AS [Status], r.blocking_session_id AS [BlockedBy],
+            r.total_elapsed_time AS [Duration_ms], r.wait_type AS [WaitType],
+            SUBSTRING(st.text, (r.statement_start_offset/2)+1, ((CASE r.statement_end_offset WHEN -1 THEN DATALENGTH(st.text) ELSE r.statement_end_offset END - r.statement_start_offset)/2) + 1) AS [QueryText]
+        FROM sys.dm_exec_requests r CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) st
+        WHERE r.session_id != @@SPID AND r.status NOT IN ('background', 'sleeping');
+      "
+      sqlcmd -S "$SERVER" -U "$USER" -P "$PASS" -Q "$mssql_query" -W -s "|"
+      ;;
+  esac
+}
