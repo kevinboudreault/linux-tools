@@ -1,0 +1,141 @@
+#!/usr/bin/env zsh
+
+function symfony() {
+    # --------------------------------------------------------------------------
+    # 1. Core Execution Engine (Handles CLI, Local PHP, or Docker)
+    # --------------------------------------------------------------------------
+    _console_exec() {
+        if [[ -f "./docker-compose.yml" && $(docker compose ps --services 2>/dev/null | grep -E 'web|app|php') ]]; then
+            # Attempt to execute inside an active container if using Docker
+            local container_name=$(docker compose ps --services 2>/dev/null | grep -E 'web|app|php' | head -n 1)
+            docker compose exec "$container_name" php bin/console "$@"
+        elif command -v symfony &> /dev/null && [[ $(symfony check:requirements 2>/dev/null) ]]; then
+            symfony console "$@"
+        elif [[ -f "bin/console" ]]; then
+            php bin/console "$@"
+        else
+            echo "Error: No Symfony installation or bin/console file found here." >&2
+            return 1
+        fi
+    }
+
+    # --------------------------------------------------------------------------
+    # 2. Command Router
+    # --------------------------------------------------------------------------
+    local sub_cmd="$1"
+    shift 2>/dev/null
+
+    case "$sub_cmd" in
+        # Shorthand Actions
+        sf)   _console_exec "$@" ;;
+        sfs)  
+            if command -v symfony &> /dev/null; then
+                symfony server:start "$@"
+            else
+                php -S 127.0.0.1:8000 -t public/ "$@"
+            fi
+            ;;
+        sft)  _console_exec phpunit "$@" ;;
+
+        # Scaffolding & Code Generation (MakerBundle)
+        make)
+            if ! [[ -f "bin/console" ]]; then
+                echo "Error: You must be in the root directory of a Symfony project."
+                return 1
+            fi
+
+            echo "Choose a component to scaffold:"
+            echo "1) Entity (Database Model)"
+            echo "2) Controller"
+            echo "3) Form Class"
+            echo "4) CRUD Interface (Full scaffolding)"
+            echo "5) Data Fixture Set"
+            
+            echo -n "Enter choice [1-5]: "
+            read choice
+
+            echo -n "Enter name (e.g., Product): "
+            read name
+
+            case $choice in
+                1) _console_exec make:entity "$name" ;;
+                2) _console_exec make:controller "${name}Controller" ;;
+                3) _console_exec make:form "${name}Type" ;;
+                4) _console_exec make:crud "$name" ;;
+                5) _console_exec make:fixtures "${name}Fixtures" ;;
+                *) echo "Invalid selection" ;;
+            esac
+            ;;
+
+        # Database & Doctrine Migrations Management
+        db)
+            local db_action="$1"
+            shift 2>/dev/null
+
+            case "$db_action" in
+                create)   _console_exec doctrine:database:create ;;
+                drop)     _console_exec doctrine:database:drop --force ;;
+                diff)     _console_exec make:migration ;; # Generates a migration file comparing entities vs current DB
+                migrate)  _console_exec doctrine:migrations:migrate --no-interaction ;;
+                status)   _console_exec doctrine:migrations:status ;;
+                fixtures) _console_exec doctrine:fixtures:load --no-interaction ;;
+                fresh)
+                    echo "Rebuilding database configuration from scratch..."
+                    _console_exec doctrine:database:drop --force --if-exists
+                    _console_exec doctrine:database:create
+                    _console_exec make:migration &>/dev/null || true # Fallback context catch
+                    _console_exec doctrine:migrations:migrate --no-interaction
+                    if _console_exec debug:autowiring | grep -q "Fixtures"; then
+                        _console_exec doctrine:fixtures:load --no-interaction
+                    fi
+                    echo "Database cleanly wiped, migrated, and seeded!"
+                    ;;
+                *)
+                    echo "Database Management Sub-commands:"
+                    echo "  symfony db create    Create the database"
+                    echo "  symfony db drop      Drop the database schema"
+                    echo "  symfony db diff      Generate a new migration based on Entity alterations"
+                    echo "  symfony db migrate   Run pending schema migrations"
+                    echo "  symfony db status    View migration execution milestones"
+                    echo "  symfony db fixtures  Load structural fake test data"
+                    echo "  symfony db fresh     Drop, recreate, migrate, and seed everything"
+                    ;;
+            esac
+            ;;
+
+        # Cache & Debug Optimization
+        clear)
+            echo "Scrubbing Symfony environment caches..."
+            _console_exec cache:clear
+            
+            if [[ -d "node_modules" ]]; then
+                echo "Found Node environment. Refreshing Assets via AssetMapper or Webpack..."
+                if [[ -f "importmap.php" ]]; then
+                    _console_exec asset-map:compile
+                else
+                    npm run build || npm run dev
+                fi
+            fi
+            echo "All cache registers cleared!"
+            ;;
+
+        # Default fallback: Route parameters directly into bin/console
+        *)
+            if [[ -z "$sub_cmd" ]]; then
+                echo "Symfony Developer Wrapper Tool"
+                echo "Usage: symfony [command] [options]"
+                echo ""
+                echo "Commands:"
+                echo "  sf       Run raw symfony/console directives"
+                echo "  sfs      Start the development web server"
+                echo "  sft      Execute the phpunit suite runner"
+                echo "  make     Interactive MakerBundle scaffolding prompt"
+                echo "  db       Access Doctrine schema & migration sub-menus"
+                echo "  clear    Purge environment cache records"
+                return 0
+            fi
+            _console_exec "$sub_cmd" "$@"
+            ;;
+    esac
+}
+
