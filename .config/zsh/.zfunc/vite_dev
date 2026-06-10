@@ -1,0 +1,134 @@
+#!/usr/bin/env zsh
+
+#=============================
+# Vite dev helper
+#=============================
+
+vite_dev() {
+  # --- UI Helper Functions ---
+  # Renders the interactive TUI menu
+  draw_menu() {
+    local options=("${@:3}")
+    local title="$1"
+    local selected="$2"
+    
+    # Clear the lines for the menu redraw
+    printf "\033[%dA" $(( ${#options[@]} + 2 )) 2>/dev/null
+    
+    echo -e "\033[1;36m=== $title ===\033[0m"
+    for i in {1..${#options[@]}}; do
+      if (( i == selected )); then
+        echo -e "\033[1;32m -> ${options[$i]} \033[0m"
+      else
+        echo -e "    ${options[$i]} "
+      fi
+    done
+    echo -e "\033[0;90m(Use Up/Down arrows, Press Enter to select)\033[0m"
+  }
+
+  # Captures keyboard inputs for menu navigation
+  get_menu_selection() {
+    local title="$1"
+    shift
+    local options=("$@")
+    local current=1
+    
+    # Initial print buffering spaces so draw_menu's cursor reset doesn't break
+    for i in {1..$(( ${#options[@]} + 2 ))}; do echo ""; done
+
+    # Trap Ctrl+C to clean up and restore terminal settings safely
+    trap 'stty echo icanon; echo ""; return 1' INT
+
+    # Disable canonical mode and echo so keys act immediately and invisibly
+    stty -echo -icanon
+    
+    while true; do
+      draw_menu "$title" "$current" "${options[@]}"
+      
+      # Read input bytes (handles multi-byte escape sequences for arrow keys)
+      local key
+      read -k 1 key
+      if [[ "$key" == $'\033' ]]; then
+        read -k 2 key
+        case "$key" in
+          '[A') ((current--)); (( current < 1 )) && current=${#options[@]} ;; # Up arrow
+          '[B') ((current++)); (( current > ${#options[@]} )) && current=1 ;; # Down arrow
+        esac
+      elif [[ "$key" == $'\n' ]]; then
+        break # Enter key pressed
+      fi
+    done
+
+    # Restore default terminal settings
+    stty echo icanon
+    trap - INT
+    return $current
+  }
+
+  # --- Core Logic Helpers ---
+  get_package_manager() {
+    if [[ -f "pnpm-lock.yaml" ]]; then echo "pnpm"
+    elif [[ -f "yarn.lock" ]]; then echo "yarn"
+    elif [[ -f "package-lock.json" ]]; then echo "npm"
+    else echo "npm"; fi
+  }
+
+  find_port() {
+    local port=5173
+    while nc -z localhost $port 2>/dev/null; do ((port++)); done
+    echo $port
+  }
+
+  # --- Runtime Validation ---
+  if [[ ! -f "package.json" ]]; then
+    echo "Error: No package.json found. Please run this command in your Vite project root."
+    return 1
+  fi
+
+  local PKG_MANAGER=$(get_package_manager)
+  local PORT=$(find_port)
+  local HOST="localhost"
+  local URL="http://$HOST:$PORT"
+  local BROWSER="google-chrome"
+
+  # --- TUI Options Menu ---
+  local menu_options=(
+    "Start Standard Dev Server"
+    "Start Dev Server + Open Browser"
+    "Run Production Build"
+    "Preview Production Build Local"
+    "Exit"
+  )
+
+  get_menu_selection "VITE TUI WORKFLOW" "${menu_options[@]}"
+  local choice=$?
+
+  # --- Action Handler ---
+  case $choice in
+    1)
+      echo "Starting Vite dev server..."
+      $PKG_MANAGER run dev -- --port $PORT --host $HOST
+      ;;
+    2)
+      echo "Starting Vite dev server..."
+      (
+        sleep 2
+        echo "Opening $URL in $BROWSER..."
+        open -a "$BROWSER" "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null
+      ) &
+      $PKG_MANAGER run dev -- --port $PORT --host $HOST
+      ;;
+    3)
+      echo "Running production build command..."
+      $PKG_MANAGER run build
+      ;;
+    4)
+      echo "Previewing your local production build..."
+      $PKG_MANAGER run preview -- --port $PORT --host $HOST
+      ;;
+    5)
+      echo "Exiting."
+      return 0
+      ;;
+  esac
+}
