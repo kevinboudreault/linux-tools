@@ -1,0 +1,73 @@
+#!/usr/bin/env zsh
+
+wp_setup() {
+    # Check if Docker is installed and running
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed."
+        return 1
+    fi
+
+    if ! docker info &> /dev/null; then
+        echo "Error: Docker daemon is not running. Please start Docker."
+        return 1
+    fi
+
+    local CONTAINER_NAME="$WP_CONTAINER_NAME"
+    if [[ -z "$CONTAINER_NAME" ]]; then
+	# If env var not set for container name, prompt user
+        until [[ -n "$CONTAINER_NAME" ]]; do
+	    echo -n "Enter the running WordPress container Name or ID: "
+            read CONTAINER_NAME
+        done
+    fi
+
+    # Verify that the specified container is actively running
+    if ! docker ps --format '{{.Names}} {{.ID}}' | grep -q "$CONTAINER_NAME"; then
+        echo "Error: Container '$CONTAINER_NAME' is not running or does not exist."
+        return 1
+    fi
+
+    # Prompt for configuration details
+    local SITE_URL="$WP_URL"
+    local SITE_TITLE="$WP_TITLE"
+    local WP_USER="$WP_USER"
+    local WP_PASS="$WP_PWD"
+
+    if [[ -z "$SITE_URL" ]]; then
+        echo -n "Enter the local Site URL (e.g., http://localhost:8080): "
+        read SITE_URL
+        if [[ -z "$SITE_URL" ]]; then
+            SITE_URL="http://localhost"
+        fi
+    fi
+
+    if [[ -z "$SITE_TITLE" ]]; then
+        echo -n "Enter Site Title: "
+        read SITE_TITLE
+        if [[ -z "$SITE_TITLE" ]]; then
+            SITE_TITLE="Existing Container Dev Sandbox"
+        fi
+    fi
+
+    echo "Running WordPress core installation inside $CONTAINER_NAME..."
+
+    # Execute WP-CLI installation straight inside the active container environment
+    # Runs as the web server user (www-data) to ensure correct file ownership permissions
+    docker exec -it --user www-data "$CONTAINER_NAME" wp core install \
+        --url="$SITE_URL" \
+        --title="$SITE_TITLE" \
+        --admin_user="$WP_USER" \
+        --admin_password="$WP_PASS" \
+        --admin_email="$WP_ADMIN_EMAIL"
+
+    # Check if the execution returned a success code
+    if [ $? -eq 0 ]; then
+        echo "\nInstallation complete!"
+        echo "URL: $SITE_URL"
+        echo "Admin User: $WP_USER"
+        echo "Admin Password: $WP_PASS"
+    else
+        echo "Error: WordPress installation failed inside the container."
+        return 1
+    fi
+}
