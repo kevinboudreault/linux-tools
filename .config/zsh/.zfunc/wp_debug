@@ -1,0 +1,64 @@
+#!/usr/bin/env zsh
+
+wp_debug() {
+    # Check if Docker is installed and running
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed."
+        return 1
+    fi  
+
+    if ! docker info &> /dev/null; then
+        echo "Error: Docker daemon is not running. Please start Docker."
+        return 1
+    fi  
+
+    local CONTAINER_NAME="$WP_CONTAINER_NAME"
+    if [[ -z "$CONTAINER_NAME" ]]; then
+        # If env var not set for container name, prompt user
+        until [[ -n "$CONTAINER_NAME" ]]; do
+            echo -n "Enter the running WordPress container Name or ID: "
+            read CONTAINER_NAME
+        done
+    fi  
+
+    # Verify that the specified container is actively running
+    if ! docker ps --format '{{.Names}} {{.ID}}' | grep -q "$CONTAINER_NAME"; then
+        echo "Error: Container '$CONTAINER_NAME' is not running or does not exist."
+        return 1
+    fi  
+
+    echo "Checking current WordPress debug status inside $CONTAINER_NAME..."
+
+    # Use WP-CLI to check if WP_DEBUG is true or false
+    local DEBUG_STATUS
+    DEBUG_STATUS=$(docker exec --user www-data "$CONTAINER_NAME" wp config get WP_DEBUG 2>/dev/null)
+
+    if [[ "$DEBUG_STATUS" == "true" ]]; then
+        echo "\n🔍 Turning OFF WordPress Debugging..."
+
+        # Toggle all values to false/default using WP-CLI
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG false --raw
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG_LOG false --raw
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG_DISPLAY true --raw
+
+        echo "Debug mode deactivated."
+    else
+        echo "\n🛠️ Turning ON WordPress Debugging..."
+
+        # Toggle all values to true using WP-CLI
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG true --raw
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG_LOG true --raw
+        docker exec --user www-data "$CONTAINER_NAME" wp config set WP_DEBUG_DISPLAY false --raw
+
+        echo "Debug mode activated."
+        
+        # Give the container a brief moment to update before tailing
+        sleep 1
+
+        echo "📄 Tailing debug.log (Press Ctrl+C to exit)..."
+        echo "------------------------------------------------"
+        
+        # Tail the file directly from inside the container
+        docker exec -it "$CONTAINER_NAME" tail -f wp-content/debug.log
+    fi
+}
