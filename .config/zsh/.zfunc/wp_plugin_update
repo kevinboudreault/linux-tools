@@ -1,0 +1,72 @@
+#!/usr/bin/env zsh
+
+wp_plugin_update() {
+    # Check if Docker is installed and running
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed."
+        return 1
+    fi  
+
+    if ! docker info &> /dev/null; then
+        echo "Error: Docker daemon is not running. Please start Docker."
+        return 1
+    fi  
+
+    local CONTAINER_NAME="$WP_CONTAINER_NAME"
+    if [[ -z "$CONTAINER_NAME" ]]; then
+        # If env var not set for container name, prompt user
+        until [[ -n "$CONTAINER_NAME" ]]; do
+            echo -n "Enter the running WordPress container Name or ID: "
+            read CONTAINER_NAME
+        done
+    fi  
+
+    # Verify that the specified container is actively running
+    if ! docker ps --format '{{.Names}} {{.ID}}' | grep -q "$CONTAINER_NAME"; then
+        echo "Error: Container '$CONTAINER_NAME' is not running or does not exist."
+        return 1
+    fi  
+
+    echo "Checking for available plugin updates inside $CONTAINER_NAME..."
+    echo "------------------------------------------------"
+
+    # List plugins that have updates available
+    docker exec --user www-data "$CONTAINER_NAME" wp plugin list --update=available
+
+    # Prompt the user for the update action
+    echo "\nSelect an update option:"
+    echo "1) Update ALL plugins"
+    echo "2) Update a specific plugin"
+    echo "3) Cancel"
+    echo -n "Enter choice [1-3]: "
+    read UPDATE_CHOICE
+
+    case "$UPDATE_CHOICE" in
+        1)
+            echo "\nUpdating all plugins..."
+            docker exec -it --user www-data "$CONTAINER_NAME" wp plugin update --all
+            ;;
+        2)
+            echo -n "\nEnter the name (slug) of the plugin to update: "
+            read PLUGIN_SLUG
+            if [[ -z "$PLUGIN_SLUG" ]]; then
+                echo "Error: Plugin slug cannot be empty."
+                return 1
+            fi
+            echo "\nUpdating plugin: $PLUGIN_SLUG..."
+            docker exec -it --user www-data "$CONTAINER_NAME" wp plugin update "$PLUGIN_SLUG"
+            ;;
+        *)
+            echo "\nOperation cancelled."
+            return 0
+            ;;
+    esac
+
+    # Check if the execution returned a success code
+    if [ $? -eq 0 ]; then
+        echo "\nPlugin management completed successfully!"
+    else
+        echo "\nError: Plugin update failed inside the container."
+        return 1
+    fi  
+}
