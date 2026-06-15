@@ -1,0 +1,45 @@
+#!/usr/bin/env zsh
+
+wp_plugin_status() {
+    # Check if Docker is installed and running
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed."
+        return 1
+    fi  
+
+    if ! docker info &> /dev/null; then
+        echo "Error: Docker daemon is not running. Please start Docker."
+        return 1
+    fi  
+
+    local CONTAINER_NAME="$WP_CONTAINER_NAME"
+    if [[ -z "$CONTAINER_NAME" ]]; then
+        # If env var not set for container name, prompt user
+        until [[ -n "$CONTAINER_NAME" ]]; do
+            echo -n "Enter the running WordPress container Name or ID: "
+            read CONTAINER_NAME
+        done
+    fi  
+
+    # Verify that the specified container is actively running
+    if ! docker ps --format '{{.Names}} {{.ID}}' | grep -q "$CONTAINER_NAME"; then
+        echo "Error: Container '$CONTAINER_NAME' is not running or does not exist."
+        return 1
+    fi  
+
+    echo "Fetching plugin status from $CONTAINER_NAME..."
+    echo "------------------------------------------------"
+
+    # Format the output table with Name, Status, Version, and Update availability
+    docker exec --user www-data "$CONTAINER_NAME" wp plugin list --fields=name,status,version,update
+
+    # Check if the execution returned a success code
+    if [ $? -eq 0 ]; then
+        echo "------------------------------------------------"
+        echo "Plugin status retrieval completed successfully!"
+    else
+        echo "\nError: Failed to fetch plugin list from the container."
+        return 1
+    fi  
+}
+
