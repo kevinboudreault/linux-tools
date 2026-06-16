@@ -1,0 +1,91 @@
+#!/usr/bin/env zsh
+
+wp_check_logs() {
+    # Check if Docker is installed and running
+    if ! command -v docker &> /dev/null; then
+        echo "Error: Docker is not installed."
+        return 1
+    fi  
+
+    if ! docker info &> /dev/null; then
+        echo "Error: Docker daemon is not running. Please start Docker."
+        return 1
+    fi  
+
+    local CONTAINER_NAME="$WP_CONTAINER_NAME"
+    if [[ -z "$CONTAINER_NAME" ]]; then
+        # If env var not set for container name, prompt user
+        until [[ -n "$CONTAINER_NAME" ]]; do
+            echo -n "Enter the running WordPress container Name or ID: "
+            read CONTAINER_NAME
+        done
+    fi  
+
+    # Verify that the specified container is actively running
+    if ! docker ps --format '{{.Names}} {{.ID}}' | grep -q "$CONTAINER_NAME"; then
+        echo "Error: Container '$CONTAINER_NAME' is not running or does not exist."
+        return 1
+    fi  
+
+    # Interactive Log Configuration
+    echo "\nSelect log type to view:"
+    echo "1) All Logs (Errors + Warnings)"
+    echo "2) Errors Only"
+    echo "3) Warnings Only"
+    echo -n "Enter choice [1-3]: "
+    read LOG_CHOICE
+
+    echo -n "Enter a search term / keyword (leave empty for all): "
+    read SEARCH_TERM
+
+    echo -n "How many lines to tail? (default 100): "
+    read TAIL_LINES
+    [[ -z "$TAIL_LINES" ]] && TAIL_LINES=100
+
+    echo "\nFetching and parsing logs from $CONTAINER_NAME..."
+    echo "------------------------------------------------"
+
+    # Define standard WordPress / Apache / PHP log locations inside official image
+    # Reads from standard output streams first, falls back to common log paths if stream is empty
+    local LOG_CMD="docker logs --tail $TAIL_LINES $CONTAINER_NAME"
+    
+    # ANSI Color Escapes for terminal scannability
+    local RED='\033[0;31m'
+    local YELLOW='\033[1;33m'
+    local NC='\033[0m' # No Color
+
+    # Process logs according to choice and search filters
+    case "$LOG_CHOICE" in
+        1)
+            # Display all logs, highlighting Errors in Red and Warnings in Yellow
+            eval "$LOG_CMD" 2>&1 | grep -i "${SEARCH_TERM:-.}" | awk -v r="$RED" -v y="$YELLOW" -v nc="$NC" '
+                /error/ || /Fatal/ || /Notice/ {print r $0 nc; next}
+                /warning/ || /Warning/ {print y $0 nc; next}
+                {print}
+            '
+            ;;
+        2)
+            # Filter specifically for Error keywords
+            echo -e "${RED}[FILTER: ERRORS ONLY]${NC}"
+            eval "$LOG_CMD" 2>&1 | grep -E -i "error|fatal|notice" | grep -i "${SEARCH_TERM:-.}"
+            ;;
+        3)
+            # Filter specifically for Warning keywords
+            echo -e "${YELLOW}[FILTER: WARNINGS ONLY]${NC}"
+            eval "$LOG_CMD" 2>&1 | grep -E -i "warning" | grep -i "${SEARCH_TERM:-.}"
+            ;;
+        *)
+            echo "Invalid choice. Operation cancelled."
+            return 1
+            ;;
+    esac
+
+    # Check if the execution returned a success code
+    if [ $? -eq 0 ]; then
+        echo "------------------------------------------------"
+        echo "Log checking complete."
+    else
+        echo "\nError: Failed to retrieve logs from the container."
+        return 1
+    fi  
+}
