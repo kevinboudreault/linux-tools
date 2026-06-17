@@ -1,36 +1,95 @@
 #!/usr/bin/env zsh
 
-
+# Define the sub-utilities in the shell environment when called
 dk_ctnr_count(){
-        STATUS=${1:="running"}
-        echo $(docker ps --filter "status=${STATUS}" --format '{{.ID}}' | wc -l)
+    local status="${1:-running}"
+    echo $(docker ps --filter "status=${status}" --format '{{.ID}}' | wc -l) 
 }
 
 dk_status(){
-	CONTSTATUS=${1:="running"}
-	CONTCOUNT=$(dk_ctnr_count ${CONTSTATUS})
+    local cont_status="${1:-running}"
+    local cont_count=$(dk_ctnr_count "${cont_status}")
 
-	echo "====[ $CONTSTATUS # $CONTCOUNT ]====\n"
-	docker ps --filter "status=${CONTSTATUS}" --format "[{{.ID}}] {{.Names}} : ({{.Status}}) {{.Ports}}"
-	echo -e "\n\n"
+    echo "====[ ${cont_status} # ${cont_count} ]====\n"
+    docker ps --filter "status=${cont_status}" --format "[{{.ID}}] {{.Names}} : ({{.Status}}) {{.Ports}}"
+    echo "\n\n"
 }
 
 dk_rld(){
-	CTNR_URL=${1:="localhost"}
-	CTNR_POR=${2:="9090"}
+    local ctnr_url="${1:-localhost}"
+    local ctnr_por="${2:-9090}"
 
-	curl -X POST ${CTNR_URL}:${CTNR_POR}/-/reload
+    curl -X POST "${ctnr_url}:${ctnr_por}/-/reload"
 }
 
 dk_ctnr(){
-	if (curl -s --unix-socket /var/run/docker.sock http/_ping 2>&1 >/dev/null); then
-		dk_status "exited"
-		dk_status
-	fi
+    if curl -s --unix-socket /var/run/docker.sock http/_ping >/dev/null 2>&1; then
+        dk_status "exited"
+        dk_status "running"
+    else
+        echo "Docker daemon is not reachable."
+    fi
 }
 
-docker_func(){
-	echo "Initializing my Docker functions"
+docker_init(){
+    echo "Initializing my Docker functions"
 }
 
-docker_func "$@"
+# Main execution logic
+local first_arg="${1:-}"
+local options=("ctnr_count" "status" "rld" "ctnr" "init")
+
+main_menu() {
+    echo "Available Docker Functions:"
+    echo "---------------------------"
+    for i in "${options[@]}"; do
+        echo "  [${i}] : Run '$i' function"
+    done
+    
+    local user_choice
+    read "user_choice?Please select a function: "
+    
+    if [[ -z "$user_choice" ]]; then
+        echo "No function selected."
+        return 1
+    fi
+    
+    case "$user_choice" in
+        "ctnr_count") dk_ctnr_count ;;
+        "status")     dk_status ;;
+        "rld")        dk_rld ;;
+        "ctnr")       dk_ctnr ;;
+        "init")       docker_init ;;
+        *)            echo "Invalid option '$user_choice'." ;;
+    esac
+}
+
+# Process explicit menu flags or empty arguments
+if [[ "$first_arg" == "--menu" ]] || [[ "$first_arg" == "-" ]] || [[ -z "$first_arg" ]]; then
+    main_menu
+    return 0
+fi
+
+# Zsh associative array mapping
+typeset -A arg_map=(
+    ["ctnr_count"]="dk_ctnr_count"
+    ["status"]="dk_status"
+    ["rld"]="dk_rld"
+    ["ctnr"]="dk_ctnr"
+    ["init"]="docker_init"
+    ["-ctnr_count"]="dk_ctnr_count"
+    ["-status"]="dk_status"
+    ["-rld"]="dk_rld"
+    ["-ctnr"]="dk_ctnr"
+    ["-init"]="docker_init"
+)
+
+local lookup_key="${(L)first_arg}"
+local target_func="${arg_map[$lookup_key]}"
+
+if [[ -n "$target_func" ]]; then
+    shift
+    $target_func "$@"
+else
+    main_menu
+fi
