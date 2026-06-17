@@ -1,0 +1,123 @@
+#!/usr/bin/env zsh
+
+#============================================
+# Zsh RCON utilities
+#============================================
+
+rcon_tools() {
+    # Default values
+    RCON_CONNECT='127.0.0.1:27015'
+    RCON_PASSWORD='test'
+    RCON_TIMEOUT=2
+
+    #######################################
+    # Parse arguments
+    #######################################
+    while (( "$#" )); do
+        case "$1" in
+            --connect|-c)
+                RCON_CONNECT="$2"
+                shift 2
+                ;;
+            --password|-p)
+                RCON_PASSWORD="$2"
+                shift 2
+                ;;
+            --timeout|-t)
+                RCON_TIMEOUT="$2"
+                shift 2
+                ;;
+            --help|-h)
+                cat <<'EOF'
+Usage: rcon-test [OPTION]...
+
+Connect to an RCON server and test the connection.
+
+    --connect, -c    Set the RCON address (default: 127.0.0.1:27015)
+    --password, -p   Set the password (default: test)
+    --timeout, -t    Set the connection timeout in seconds (default: 2)
+    --help, -h       Display this help and exit
+
+Example:
+    rcon-test --connect 192.168.1.100:27015 --password 'secret123'
+EOF
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+
+    #######################################
+    # Split address
+    #######################################
+    IFS=':' read -r RCON_IP RCON_PORT <<< "$RCON_CONNECT"
+
+    #######################################
+    # Function to send RCON packet
+    #######################################
+    rcon_send() {
+        local username="$1"
+        local body="$2"
+        local packet_len
+
+        # Calculate string lengths for the length-prefixed binary format
+        local len_user=$(printf '%s' "$username" | wc -c)
+        local len_pass=$(printf '%s' "$RCON_PASSWORD" | wc -c)
+        local len_body=$(printf '%s' "$body" | wc -c)
+
+        # Construct the binary data
+        # Format: \x01\x00\x00\x00[Length]UsernamePassword\x01\x00\x00\x00[Length]Body
+        # Note: wc -c includes newline if read -r is not careful, so we rely on printf behavior.
+        # To ensure clean length, we use printf '%s' strictly.
+
+        local cmd_prefix="printf '%b' '\\x01\\x00\\x00\\x00${len_user}'"
+        local cmd_data="\"${username}${RCON_PASSWORD}\\x01\\x00\\x00\\x00${len_body}\""
+        local cmd_suffix="| timeout ${RCON_TIMEOUT} nc -w ${RCON_TIMEOUT} ${RCON_IP} ${RCON_PORT} 2>/dev/null"
+
+        $cmd_prefix $cmd_data $cmd_suffix
+    }
+
+    #######################################
+    # Function to test connection
+    #######################################
+    test_rcon() {
+        local body="ping"
+        local response
+
+        echo "Connecting to $RCON_CONNECT..."
+
+        # Send a ping request
+        response=$(rcon_send "admin" "$body")
+
+        if [ -z "$response" ]; then
+            echo "Connection failed. Possible causes:"
+            echo "  - Server is not reachable or wrong port"
+            echo "  - Wrong password"
+            echo "  - Firewall blocking port"
+            echo "  - Timeout exceeded ($RCON_TIMEOUT seconds)"
+            return 1
+        fi
+
+        echo "Connection successful!"
+        echo "Response received: $response"
+    }
+
+    #######################################
+    # Main execution
+    #######################################
+    main() {
+        echo "RCON Connection Tester"
+        echo "======================"
+        echo "Config:"
+        echo "  IP:Port : $RCON_CONNECT"
+        echo "  Password : $RCON_PASSWORD"
+        echo "  Timeout  : $RCON_TIMEOUT s"
+        echo ""
+        test_rcon
+    }
+
+    main "$@"
+}
