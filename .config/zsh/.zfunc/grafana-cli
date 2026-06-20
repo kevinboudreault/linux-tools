@@ -1,0 +1,213 @@
+#!/usr/bin/env zsh
+
+function grafana-cli() {
+  # ---------------------------------------------------------------------------
+  # Configuration & Defaults
+  # ---------------------------------------------------------------------------
+  local CONTAINER_NAME="${GRAFANA_CONTAINER_NAME:-grafana-local}"
+  local BASE_URL="${GRAFANA_URL:-http://localhost:3000}"
+  local BACKUP_DIR="${GRAFANA_BACKUP_DIR:-./grafana_backups}"
+
+  # ---------------------------------------------------------------------------
+  # Helper Functions
+  # ---------------------------------------------------------------------------
+  # Display usage information
+  usage() {
+    print -r "Usage: grafana-cli [OPTION] [ARGUMENT]"
+    print -r ""
+    print -r "A robust Zsh utility to manage a local Dockerized Grafana instance."
+    print -r ""
+    print -r "Options:"
+    print -r "  -h, --help               Show this help message and exit"
+    print -r "  --health                 Check the Grafana API health status"
+    print -r "  --list-dashboards        List all dashboard titles and UIDs"
+    print -r "  --backup <uid>           Export a specific dashboard JSON payload by UID"
+    print -r "  --import <file_path>     Import/Update a dashboard from a local JSON file"
+    print -r "  --list-datasources       List all configured data sources"
+    print -r ""
+    print -r "Environment Variables (Optional):"
+    print -r "  GRAFANA_TOKEN            Your Grafana Service Account Token (Required)"
+    print -r "  GRAFANA_CONTAINER_NAME   Docker container name (Default: \"grafana-local\")"
+    print -r "  GRAFANA_URL              Grafana base URL (Default: \"http://localhost:3000\")"
+    print -r "  GRAFANA_BACKUP_DIR       Directory for saved backups (Default: \"./grafana_backups\")"
+  }
+
+  # Log messages with visual anchors
+  log_info()  { print -P "%F{cyan}ℹ%f %B$1%b" }
+  log_succ()  { print -P "%F{green}✔%f %B$1%b" }
+  log_err()   { print -P "%F{red}✘%f %B$1%b" >&2 }
+
+  # Make API calls using curl
+  api_call() {
+    local method="$1"
+    local endpoint="$2"
+    local data_file="$3"
+    local -a curl_opts
+
+    curl_opts=(
+      "-s"
+      "-H" "Authorization: Bearer ${GRAFANA_TOKEN}"
+      "-H" "Content-Type: application/json"
+      "-X" "${method}"
+    )
+
+    if [[ -n "$data_file" ]]; then
+      curl_opts+=("-d" "@${data_file}")
+    fi
+
+    curl "${curl_opts[@]}" "${BASE_URL}${endpoint}"
+  }
+
+  # ---------------------------------------------------------------------------
+  # Pre-flight Checks (Dependencies, Environment, Docker)
+  # ---------------------------------------------------------------------------
+  # Check system dependencies
+  for cmd in curl jq docker; do
+    if ! command -v "$cmd" &>/dev/null; then
+      log_err "Required dependency '${cmd}' is not installed."
+      return 1
+    fi
+  done
+
+  # Validate Token existence
+  if [[ -z "${GRAFANA_TOKEN}" ]]; then
+    log_err "Environment variable 'GRAFANA_TOKEN' is not set."
+    return 1
+  fi
+
+  # Check if the specific Docker container is running
+  if ! docker ps --filter "name=^/${CONTAINER_NAME}$" --filter "status=running" --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}$"; then
+    log_err "Docker container '${CONTAINER_NAME}' is not running."
+    return 1
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Command Routing (CLI Arguments)
+  # ---------------------------------------------------------------------------
+  if (( $# == 0 )); then
+    usage
+    return 1
+  fi
+
+  case "$1" in
+    -h|--help)
+      usage
+      return 0
+      ;;
+
+    --health)
+      log_info "Checking Grafana API health..."
+      local response
+      response=$(api_call "GET" "/api/health")
+      
+      if [[ $(echo "$response" | jq -r '.database // empty') == "ok" ]]; then
+        log_succ "Grafana instance is healthy!"
+        echo "$response" | jq .
+      else
+        log_err "Grafana health check failed or returned an unexpected response."
+        echo "$response" | jq .
+        return 1
+      fi
+      ;;
+
+    --list-dashboards)
+      log_info "Fetching dashboard inventory..."
+      local response
+      response=$(api_call "GET" "/api/search?type=dash-db")
+      
+      if [[ $(echo "$response" | jq 'type') == "array" ]]; then
+        log_succ "Successfully retrieved dashboards:"
+        echo "$response" | jq -r '.[] | "UID: \(.uid) \t Title: \(.title)"' | column -t -s $'\t'
+      else
+        log_err "Failed to parse dashboard inventory list."
+        echo "$response" | jq .
+        return 1
+      fi
+      ;;
+
+    --backup)
+      if [[ -z "$2" ]]; then
+        log_err "Error: Missing dashboard UID argument."
+        log_info "Usage: grafana-cli --backup <dashboard_uid>"
+        return 1
+      fi
+      
+      local uid="$2"
+      log_info "Exporting dashboard '${uid}'..."
+      
+      local response
+      response=$(api_call "GET" "/api/dashboards/uid/${uid}")
+      
+      if [[ $(echo "$response" | jq -r '.dashboard // empty') == "" ]]; then
+        log_err "Dashboard with UID '${uid}' not found or inaccessible."
+        echo "$response" | jq .
+        return 1
+      fi
+
+      mkdir -p "$BACKUP_DIR"
+      local file_name="${BACKUP_DIR}/dashboard_${uid}_$(date +%Y%m%d_%H%M%S).json"
+      
+      # Package payload cleanly into the required wrapper structure for easy re-import
+      echo "$response" | jq '{dashboard: .dashboard, overwrite: true, folderId: .meta.folderId}' > "$file_name"
+      log_succ "Backup saved successfully to: ${file_name}"
+      ;;
+
+    --import)
+      if [[ -z "$2" ]]; then
+        log_err "Error: Missing file path argument."
+        log_info "Usage: grafana-cli --import <path_to_json_file>"
+        return 1
+      fi
+
+      local file_path="$2"
+      if [[ ! -f "$file_path" ]]; then
+        log_err "File not found: ${file_path}"
+        return 1
+      fi
+
+      log_info "Importing dashboard config from ${file_path}..."
+      
+      # Ensure file matches expected Grafana API structure: must root with "dashboard" key
+      if ! jq -e '.dashboard' "$file_path" &>/dev/null; then
+        log_err "Invalid JSON structure. Schema must contain a top-level 'dashboard' object."
+        return 1
+      fi
+
+      local response
+      response=$(api_call "POST" "/api/dashboards/db" "$file_path")
+      
+      if [[ $(echo "$response" | jq -r '.status // empty') == "success" ]]; then
+        local slug
+        slug=$(echo "$response" | jq -r '.slug')
+        log_succ "Dashboard imported successfully as: ${slug}"
+        echo "$response" | jq .
+      else
+        log_err "Failed to import dashboard configuration."
+        echo "$response" | jq .
+        return 1
+      fi
+      ;;
+
+    --list-datasources)
+      log_info "Fetching data sources configuration..."
+      local response
+      response=$(api_call "GET" "/api/datasources")
+      
+      if [[ $(echo "$response" | jq 'type') == "array" ]]; then
+        log_succ "Configured Data Sources:"
+        echo "$response" | jq -r '.[] | "ID: \(.id) \t Type: \(.type) \t Name: \(.name)"' | column -t -s $'\t'
+      else
+        log_err "Failed to fetch data sources."
+        echo "$response" | jq .
+        return 1
+      fi
+      ;;
+
+    *)
+      log_err "Invalid choice: $1"
+      usage
+      return 1
+      ;;
+  esac
+}
+
