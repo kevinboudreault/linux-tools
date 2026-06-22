@@ -1,0 +1,36 @@
+#!/usr/bin/env zsh
+
+prometheus_cli(){
+	# Exit immediately if a command fails
+	set -e
+
+	# Configuration with environment variable overrides
+	PROM_URL="${PROM_URL:-http://localhost:9090/api/v1/query}"
+	QUERY="${1:-up}" # Accepts query as the first argument, defaults to "up"
+
+	# Check dependencies
+	for cmd in curl jq; do
+		if ! command -v "$cmd" &> /dev/null; then
+			echo "Error: Required command '$cmd' is not installed." >&2
+			exit 1
+		fi
+	done
+
+	echo "Querying Prometheus: $QUERY"
+
+	# Fetch metric data with error handling and a 10-second timeout
+	response=$(curl -sS --max-time 10 --data-urlencode "query=$QUERY" "$PROM_URL")
+
+	# Validate JSON structure and handle Prometheus API errors
+	status=$(echo "$response" | jq -r '.status' 2>/dev/null)
+
+	if [[ "$status" != "success" ]]; then
+		error_msg=$(echo "$response" | jq -r '.error // "Unknown API error"' 2>/dev/null)
+		echo "Prometheus API Error: $error_msg" >&2
+		exit 1
+	fi
+
+	# Parse and display JSON results
+	echo -e "\nResults:"
+	echo "$response" | jq -c '.data.result[] | {instance: .metric.instance, status: .value[1]}'
+}
