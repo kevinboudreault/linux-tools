@@ -26,7 +26,7 @@ wireshark_zsh_autoload() {
         
         # Check if the function name matches the prefix
         # We use a glob pattern match for robustness
-        if [[ "$fname" == "${MY_FUNC_PREFIX}("*") ]]; then
+        if [[ "$fname" == "${MY_FUNC_PREFIX}["*")" ]]; then
             
             # We need to inject this function into the environment.
             # 'typeset -f' allows us to capture the *definition* (body) of a
