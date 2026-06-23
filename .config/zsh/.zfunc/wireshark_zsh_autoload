@@ -1,0 +1,68 @@
+#!/usr/bin/env zsh
+
+# =============================================================================
+# File: wireshark_zsh_autoload
+# Description: A modular autoloader for Wireshark-related Zsh functions.
+# Usage: Ensure 'wireshark_zsh_autoload' is called in your ~/.zshrc.
+# =============================================================================
+
+# Define the prefix string used to identify Wireshark commands.
+# Functions must be defined locally with a name starting with this string.
+MY_FUNC_PREFIX='wireshark_'
+
+# =============================================================================
+# FUNCTION: wireshark_zsh_autoload
+# =============================================================================
+# This function acts as the "Gateway". When called, it scans your current shell
+# session for any functions defined locally that match the prefix.
+# It then extracts their bodies using 'typeset -f' and places them into the 
+# current environment, mimicking the effect of sourcing them without the 
+# overhead of re-reading the source files.
+wireshark_zsh_autoload() {
+    # Iterate through all functions currently available to the shell
+    for func in ${(f)functions}; {
+        # Extract the function name from the "function_name" list
+        local fname="${func[1]}"
+        
+        # Check if the function name matches the prefix
+        # We use a glob pattern match for robustness
+        if [[ "$fname" == "${MY_FUNC_PREFIX}("*") ]]; then
+            
+            # We need to inject this function into the environment.
+            # 'typeset -f' allows us to capture the *definition* (body) of a
+            # function that already exists in the shell.
+            # Note: We must handle the output carefully to avoid creating empty vars.
+            local body
+            if typeset -f "$fname" > /dev/null 2>&1; then
+                # Capture the function body.
+                # We use a unique delimiter to prevent issues with special chars
+                # in function bodies (e.g., 'EOF')
+                
+                # We use a temporary file descriptor to handle multiline bodies safely
+                local temp_fd
+                setopt pipefail
+                eval "$(typeset -f "$fname" > "$temp_fd" 2>/dev/null)"
+                
+                # If we successfully captured something, re-type it in the environment
+                # This effectively "sources" the logic without the file header.
+                # We pass the captured output to 'eval' to define it locally.
+                eval "${temp_fd}"
+                
+                # Remove the temp file handle
+                unset "$temp_fd"
+            fi
+            
+            # Optional: Uncomment below to see what is being loaded
+            # print "Autoloading local function: $fname"
+        fi
+    }
+}
+
+# =============================================================================
+# DOCUMENTATION: How to add a new command
+# =============================================================================
+# To add a new Wireshark command to this module:
+# 1. Define a function in your code with the name starting with 'wireshark_'.
+#    Example: wireshark_cap_filter() { ... }
+# 2. Place the definition in a script loaded AFTER wireshark_zsh_autoload runs.
+# 3. The autoloader will detect it automatically in the current session.
