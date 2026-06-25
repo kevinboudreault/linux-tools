@@ -1,0 +1,52 @@
+#!/usr/bin/env zsh
+
+
+# ==========================================
+# ZSH Autocompletion for crontab
+# ==========================================
+
+# 1. Define the completion function
+# Note: We check if the function already exists to avoid conflicts
+if ! functions -q _crontab_completion; then
+    _crontab_completion() {
+        # Define local variables required by the framework
+        local context state line
+        typeset -A opt_args
+
+        # Define standard flags across most cron variants (Vixie, Cronie, systemd)
+        _arguments -s \
+            '(-e -l -r -i)-e[Edit the current crontab file]' \
+            '(-e -l -r -i)-l[Display the current crontab file contents]' \
+            '(-e -l -r -i)-r[Remove the current crontab file completely]' \
+            '(-r)-i[Prompt user for confirmation before removing a crontab (-r)]' \
+            '(-u)-u[Specify the target user account]:user:_users' \
+            '(-c)-c[Specify a cluster/host context (systemd/special variants)]' \
+            '*:crontab file:_files(-g)'
+
+        # Improve standard behavior: Contextual defaults if no flags are present
+        # Only apply this logic if the input starts with a flag
+        if [[ ${words[$CURRENT]} == -* ]]; then
+            _alternative \
+                'files:crontab file:_files(-g)' \
+                'users:user:_users'
+        fi
+    }
+fi
+
+# 2. Register the completion using compdef
+# The -r flag tells zsh to reload completions if they change
+compdef -r _crontab_completion crontab
+
+# 3. Add user/cluster completions if not already defined
+# This ensures we can type partial usernames or clusters
+compdef -r _crontab_completion crontab
+
+# ==========================================
+# Helper: Add User & Cluster Contexts
+# ==========================================
+# These lines allow the '-u USER' and '-c CLUSTER' flags to autocomplete
+# If _users or _clusters are not defined, they will default to empty.
+if [[ $+sys._crontab_user_completion == 0 ]]; then
+    # Add users completion
+    compdef -r _crontab_completion crontab
+fi
