@@ -1,20 +1,77 @@
 #!/usr/bin/env zsh
 # ==============================================================================
-# Hermes Agent Zsh Productivity Helper
+# Hermes Agent Zsh Productivity Helper (With Scraping Pipeline)
 # ==============================================================================
 
 # Global configuration paths
 export HERMES_HELPER_DIR="${HOME}/.hermes"
+export HERMES_SCRAPE_CACHE="${HERMES_HELPER_DIR}/scraped_pages"
 
-# 1. Direct Quick Ask (One-Shot Plaintext Pipeline)
-# Uses the streamlined 'hermes -z' flag for parent scripts / quick terminal inputs
+# Ensure cache directories exist seamlessly
+mkdir -p "$HERMES_SCRAPE_CACHE"
+
+# 1. Web Scraping & Context Generation Pipeline
+# Scrapes a URL, strips HTML noise, caches it, and prepares it for Hermes use
+hermes_scrape() {
+    local url=$1
+    local custom_name=$2
+
+    if [[ -z "$url" ]]; then
+        echo "❌ Error: Please provide a target URL."
+        echo "Usage: hermes_scrape <url> [optional_custom_filename]"
+        return 1
+    fi
+
+    # Create a clean, safe filename from the URL or custom input
+    local sanitized_name
+    if [[ -n "$custom_name" ]]; then
+        sanitized_name=$(echo "$custom_name" | tr -cd '[:alnum:]_-')
+    else
+        sanitized_name=$(echo "$url" | sed -E 's|https?://||; s|www\.||; s|[^[:alnum:]]|_|g' | cut -c1-50)
+    fi
+
+    local timestamp=$(date +"%Y%m%d_%H%M%S")
+    local output_file="${HERMES_SCRAPE_CACHE}/${sanitized_name}_${timestamp}.md"
+
+    echo "🌐 Initiating target extraction: $url"
+    
+    # Check for available scraping CLI engines on the host system
+    if command -v rdrview &> /dev/null; then
+        # Uses rdrview (Firefox Reader View clone) if installed for clean Markdown/Text
+        rdrview -M "$url" > "$output_file" 2>/dev/null
+    elif command -v curl &> /dev/null && command -v pup &> /dev/null; then
+        # Uses curl paired with HTML text extractor 'pup'
+        curl -sL "$url" | pup 'body text{}' | sed '/^[[:space:]]*$/d' > "$output_file"
+    elif command -v lynx &> /dev/null; then
+        # Fallback to text-based web browser dump
+        lynx -dump -nolist "$url" > "$output_file"
+    elif command -v curl &> /dev/null; then
+        # Bare fallback stripping script/style tags out natively
+        curl -sL "$url" | sed -e 's/<script.[^>]*>.*<\/script>//g' -e 's/<style.[^>]*>.*<\/style>//g' -e 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' > "$output_file"
+    else
+        echo "❌ Error: No extraction utilities found. Please install 'curl', 'lynx', or 'rdrview'."
+        return 1
+    fi
+
+    if [[ -s "$output_file" ]]; then
+        echo "✅ Extraction Complete!"
+        echo "📂 Cached at: $output_file"
+        echo "💡 To inject this into Hermes later, run: ha \"Analyze this cached resource\" < $output_file"
+    else
+        echo "❌ Extraction failed or returned an empty payload."
+        rm -f "$output_file"
+        return 1
+    fi
+}
+
+# 2. Direct Quick Ask (One-Shot Plaintext Pipeline)
 ask_hermes() {
     if [[ -z "$1" ]]; then
         echo "❌ Error: Please provide a prompt."
         echo "Usage: ask_hermes \"Your prompt here\""
         return 1
     fi
-    # If a file or stream is piped, pass it into the agent
+    # Feeds standard input streams cleanly if piped
     if [[ ! -t 0 ]]; then
         hermes -z "$1"
     else
@@ -22,8 +79,7 @@ ask_hermes() {
     fi
 }
 
-# 2. Interactive Session Management
-# Quickly list, resume, or switch sessions
+# 3. Interactive Session Management
 hermes_sessions() {
     local cmd=$1
     case "$cmd" in
@@ -46,8 +102,7 @@ hermes_sessions() {
     esac
 }
 
-# 3. Fast Profile Switcher 
-# Allows operating isolated environments (e.g., dev vs. prod toolsets)
+# 4. Fast Profile Switcher 
 hermes_profile() {
     if [[ -z "$1" ]]; then
         echo "👤 Current active profile directory:"
@@ -58,15 +113,13 @@ hermes_profile() {
     hermes --profile "$1"
 }
 
-# 4. Background Gateway Manager
-# Spin up or monitor chat gateways (Telegram, Discord, Slack)
+# 5. Background Gateway Manager
 hermes_gateway() {
     local action=$1
     local platform=$2
     
     if [[ -z "$action" ]]; then
         echo "🤖 Usage: hermes_gateway [start|stop|status] [platform]"
-        echo "Available platforms: telegram, discord, slack, whatsapp"
         return 1
     fi
 
@@ -91,8 +144,7 @@ hermes_gateway() {
     esac
 }
 
-# 5. Skill & Plugin Quick Commands
-# Easily add or audit community capabilities from standards like agentskills.io
+# 6. Skill & Plugin Quick Commands
 hermes_skills() {
     local sub=$1
     case "$sub" in
@@ -113,19 +165,18 @@ hermes_skills() {
     esac
 }
 
-# 6. Maintenance & Updates
-# Pulls down latest code changes and reinstalls environment dependencies
+# 7. Maintenance & Updates
 hermes_upgrade() {
     echo "🔄 Updating Hermes Agent core engine..."
     hermes update --backup
     echo "✅ Update run completed."
 }
 
-# Define Scannable Aliases for your .zshrc
-alias ha="ask_hermes"              # ha "What is the status of my docker container?"
-alias hs="hermes_sessions"         # hs list | hs resume [id]
-alias hp="hermes_profile"          # hp dev-profile
-alias hg="hermes_gateway"          # hg start discord | hg status
-alias hk="hermes_skills"           # hk list
-alias hup="hermes_upgrade"         # Core engine upgrader
-
+# Scannable Productivity Aliases
+alias hsc="hermes_scrape"          # hsc "https://hermes.org" "hermes_docs"
+alias ha="ask_hermes"              # ha "Summarize this data" < ~/.hermes/scraped_pages/file.md
+alias hs="hermes_sessions"         
+alias hp="hermes_profile"          
+alias hg="hermes_gateway"          
+alias hk="hermes_skills"           
+alias hup="hermes_upgrade"    
