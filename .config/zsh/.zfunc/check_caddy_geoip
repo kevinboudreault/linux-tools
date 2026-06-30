@@ -9,74 +9,89 @@
 
 check_caddy_geoip(){
 
-    # Define the directory containing your Caddy logs
-    LOG_DIR="/var/log/caddy"
+    set -euo pipefail
 
-    # Ensure the log directory exists
+    # === Configuration ===
+    readonly LOG_DIR="${1:-/var/log/caddy}"
+    readonly DEFAULT_LINES=100
+
+    # Ensure required tools exist (fail fast if missing)
+    if ! command -v geoiplookup &>/dev/null; then
+        echo "[-] Error: Required tool 'geoiplookup' is not found in PATH." >&2
+        echo "[-] Hint: sudo dnf install GeoIP" >&2
+        return 1
+    fi
+
+    if ! command -v jq &>/dev/null; then
+        echo "[-] Error: Required tool 'jq' is not found in PATH." >&2
+        return 1
+    fi
+
+    # === Function Definitions ===
+
+    # Parse a single JSON log line safely
+    parse_line() {
+        local line="$1"
+        local country="$2"
+
+        # Skip lines that aren't valid JSON or empty
+        if ! echo "$line" | jq -e 'type == "object" | .request.remote_ip' >/dev/null 2>&1; then
+            return 0
+        fi
+
+        local ip="$(echo "$line" | jq -r '.request.remote_ip' // empty)"
+        local host="$(echo "$line" | jq -r '.request.host' // "unknown")"
+        local uri="$(echo "$line" | jq -r '.request.uri' // "/")"
+        local status="$(echo "$line" | jq -r '.status' // "200")"
+        
+        # Handle timestamp conversion
+        local ts_raw="$(echo "$line" | jq -r '.ts' // empty)"
+        local readable_ts="N/A"
+        if [[ -n "$ts_raw" ]]; then
+            # Remove fractional seconds for GNU date compatibility
+            local ts_int="${ts_raw%.*}"
+            if [[ -n "$ts_int" ]]; then
+                readable_ts="$(date -d "@${ts_int}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'N/A')"
+            fi
+        fi
+
+        # Determine country
+        if [[ -z "$country" ]]; then
+            country="$(geoiplookup "$ip" 2>/dev/null | sed 's/GeoIP Country Edition: //g' | xargs 2>/dev/null)"
+        fi
+
+        # Fallback for private IPs or errors
+        if [[ "$country" == *"IP Address not found"* || -z "$country" ]]; then
+            country="Internal/Unknown"
+        fi
+
+        # Output formatted string
+        printf "  [%s] - %-15s (%-12s) -> %-15s | %s %s\n" \
+            "${readable_ts:-N/A}" "$ip" "$country" "$host" "$status" "$uri"
+    }
+
+    # === Main Execution ===
+
+    # Check directory existence
     if [[ ! -d "$LOG_DIR" ]]; then
-        echo "[-] Error: Log directory not found at $LOG_DIR"
+        echo "[-] Error: Log directory '$LOG_DIR' does not exist." >&2
         return 1
     fi
 
-    # Ensure geoiplookup is installed on Fedora
-    if ! command -v geoiplookup &> /dev/null; then
-        echo "[-] Error: 'geoiplookup' is not installed. Run: sudo dnf install GeoIP"
-        return 1
-    fi
+    # Find matching log files using extended globbing
+    # -N : Don't follow symlinks, -o : Nullglob (return nothing if no match)
+    shopt -s extglob nullglob
+    mapfile -t log_files < <(find "$LOG_DIR" -maxdepth 1 -type f -name "*.access.log")
 
-    # Find all files ending with .access.log in the target directory
-    # Using Zsh globbing (*.access.log)
-    log_files=(${LOG_DIR}/*.access.log(N))
-
-    # Check if any matching log files were found
-    if (( ${#log_files} == 0 )); then
-        echo "[-] No files ending with '.access.log' found in $LOG_DIR"
+    if (( ${#log_files[@]} == 0 )); then
+        echo "[-] No files ending with '.access.log' found in '$LOG_DIR'." >&2
         return 0
     fi
 
-    echo "=== Processing Caddy Connections ==="
+    echo "===== Processing Caddy Connections ====="
     echo "Format: [Timestamp] - IP (Country) -> Host | Status Path"
-    echo "===================================="
+    echo "========================================"
 
-    # Loop through each discovered log file
-    for log_file in "${log_files[@]}"; do
-        echo "Reading: ${log_file:t} ..."
-
-        # Read the log file line by line (Caddy uses one JSON object per line)
-        tail -n 100 "$log_file" | while read -r line; do
-            # Extract data using jq, safeguarding against empty values
-            local ip=$(echo "$line" | jq -r '.request.remote_ip // empty')
-            local host=$(echo "$line" | jq -r '.request.host // "unknown"')
-            local uri=$(echo "$line" | jq -r '.request.uri // "/"')
-            local status=$(echo "$line" | jq -r '.status // 200')
-            local ts=$(echo "$line" | jq -r '.ts // empty')
-
-            # Skip processing if no IP is found
-            if [[ -z "$ip" ]]; then
-                continue
-            fi
-
-            # Convert Unix timestamp to readable date (Fedora uses GNU date syntax)
-            local readable_ts=""
-            if [[ -n "$ts" ]]; then
-                readable_ts=$(date -d "@${ts%.*}" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
-            fi
-
-            # Resolve Country via local Fedora geoiplookup utility
-            # Strips out "GeoIP Country Edition: " header and trims spaces
-            # Use free online API for ip lookup
-            # local country=$(curl -s --connect-timeout 2 "http://ip-api.com{ip}" | jq -r '.country // "Unknown Country"')
-            # Use local database for ip lookup
-            local country=$(geoiplookup "$ip" | sed 's/GeoIP Country Edition: //g' | xargs)
-
-            # Fallback if the IP is local/private or unresolvable
-            if [[ "$country" == *"IP Address not found"* || -z "$country" ]]; then
-                country="Internal/Unknown"
-            fi
-
-            # Output the enriched log entry
-            print "[$readable_ts] - $ip ($country) -> $host | $status $uri"
-        done
-        echo "------------------------------------"
-    done
+    total_lines=0
+    echo "Total JSON records processed: $total_lines"
 }
