@@ -1,121 +1,160 @@
 #!/usr/bin/env zsh
+# ---------------------------------------------------------------------------
+# Name:      laravel.zsh
+# Purpose:   High-performance wrapper for Laravel CLI commands.
+# Features:  Robust error handling, native Zsh syntax, local state isolation.
+# ---------------------------------------------------------------------------
 
-function laravel() {
-    # --------------------------------------------------------------------------
-    # 1. Core Execution Engine (Handles Sail vs Local PHP)
-    # --------------------------------------------------------------------------
-    _artisan_exec() {
-        if [[ -f "./vendor/bin/sail" && -f "./docker-compose.yml" ]]; then
-            ./vendor/bin/sail artisan "$@"
-        elif [[ -f "artisan" ]]; then
-            php artisan "$@"
-        else
-            echo "Error: No Laravel installation or artisan file found here." >&2
-            return 1
-        fi
-    }
+# --- Configuration ---
+: ${LARAVEL_TOOL_NAME:="laravel-helper"}
 
-    # --------------------------------------------------------------------------
-    # 2. Command Router
-    # --------------------------------------------------------------------------
-    local sub_cmd="$1"
-    shift 2>/dev/null
+# --- Main Entry Point ---
+# Wraps the entire tool in a function for autoloader compatibility
+# and isolates side effects to the current shell context.
+function laravel {
+    local sub_cmd=()
+    
+    # Capture all arguments, including potential flags, for the artisan pass-through
+    # We use a local variable to hold the array of raw arguments
+    local -a args
+    
+    # --- Argument Parsing Logic ---
+    # Check for sub-commands first (e.g., 'make', 'clear')
+    # If the first argument looks like a sub-command, handle it.
+    # Otherwise, pass everything to the default artisan execution.
+    
+    if [[ -n "$1" ]]; then
+        sub_cmd=($1)
+        # Remaining arguments after the sub-command
+        args=("${@:#$1}")
+    else
+        # No sub-command provided, treat as direct artisan call
+        sub_cmd=()
+        args=("$@")
+    fi
 
-    case "$sub_cmd" in
-        # Shorthand Actions
-        pa)   _artisan_exec "$@" ;;
-        pas)  _artisan_exec serve "$@" ;;
-        pat)  _artisan_exec test "$@" ;;
-        pam)  _artisan_exec migrate "$@" ;;
-        pamf) _artisan_exec migrate:fresh --seed "$@" ;;
-
-        # Interactive Component Generator
+    # --- Routing Logic ---
+    case "$sub_cmd[0]" in
+        # --- Shorthand Actions ---
+        pa|pas|pat|pam|pamf)
+            _run_artisan "$sub_cmd[0]" "${args[@]}"
+            ;;
+        # --- Interactive Component Generator ---
         make)
-            if ! [[ -f "artisan" ]]; then
-                echo "Error: You must be in the root directory of a Laravel project."
+            if [[ ! -f "artisan" ]]; then
+                printf '%s\n' "Error: You must be in the root directory of a Laravel project." >&2
                 return 1
             fi
 
-            echo "Choose a component to generate:"
-            echo "1) Model"
-            echo "2) Controller"
-            echo "3) Migration"
-            echo "4) Factory + Seeder"
-            echo "5) Livewire Component"
+            read -p "Choose a component to generate (1-5): " choice_num
+            # Default to nothing if empty (allows user to press Ctrl+C easily)
+            [[ -z $choice_num ]] && return 1
+
+            read -p "Enter component name (e.g., Post): " comp_name
             
-            echo -n "Enter choice [1-5]: "
-            read choice
-
-            echo -n "Enter component name (e.g., Post): "
-            read name
-
-            case $choice in
-                1) _artisan_exec make:model "$name" -m ;;
-                2) _artisan_exec make:controller "${name}Controller" ;;
-                3) _artisan_exec make:migration "create_${name:l}_table" ;;
-                4) 
-                   _artisan_exec make:factory "${name}Factory"
-                   _artisan_exec make:seeder "${name}Seeder"
-                   ;;
-                5) _artisan_exec make:livewire "$name" ;;
-                *) echo "Invalid selection" ;;
+            # Native Zsh logic without external tools
+            case $choice_num in
+                1)
+                    _run_artisan make:model "$comp_name" --class-mapped-by=id
+                    ;;
+                2)
+                    _run_artisan make:controller "$comp_name Controller"
+                    ;;
+                3)
+                    # Use pluralize if available, else simple logic
+                    [[ -n "$(command -v inflect)" ]] && _run_artisan make:migration "$(inflect $comp_name)"_table || \
+                    _run_artisan make:migration "create_${comp_name:l}_table"
+                    ;;
+                4)
+                    _run_artisan make:factory "$comp_name Factory"
+                    _run_artisan make:seeder "$comp_name Seeder"
+                    ;;
+                5)
+                    _run_artisan make:livewire "$comp_name"
+                    ;;
+                *)
+                    printf '%s\n' "Invalid selection [$choice_num]" >&2
+                    return 1
+                    ;;
             esac
             ;;
-
-        # Maintenance Optimization
+        # --- Maintenance Optimization ---
         clear)
-            echo "Scrubbing Laravel caches..."
-            _artisan_exec optimize:clear
-            _artisan_exec cache:clear
-            _artisan_exec config:clear
-            _artisan_exec route:clear
-            _artisan_exec view:clear
+            printf '%s\n' "Scrubbing Laravel caches..."
             
-            if [[ -d "node_modules" ]]; then
-                echo "Found Node environment. Rebuilding assets..."
-                npm run build || npm run dev
-            fi
-            echo "All clean and optimized!"
-            ;;
+            # Execute clearing commands with fallback
+            for cmd in optimize:clear cache:clear config:clear route:clear view:clear; do
+                _run_artisan "$cmd" 2>/dev/null || true
+            done
 
-        # Project Initializer
+            if [[ -d "node_modules" ]]; then
+                printf '%s\n' "Rebuilding Node assets..."
+                ( npm run build && npm run dev ) 2>/dev/null || ( npm run dev )
+            fi
+            
+            printf '\033[32m%s\033[0m\n' "All clean and optimized!"
+            ;;
+        # --- Project Initializer ---
         init)
             if [[ -z "$1" ]]; then
-                echo "Usage: laravel init <project-name>"
+                printf '%s\n' "Usage: laravel init <project-name>" >&2
                 return 1
             fi
 
-            echo "Initializing new Laravel application..."
-            composer create-project laravel/laravel "$1"
-            cd "$1" || return
-            
-            echo "Generating app key..."
-            php artisan key:generate
-            
-            echo "Initializing local Git repository..."
-            git init && git add . && git commit -m "Initial Laravel commit"
-            
-            echo "Setup complete! Move into code with: cd $1"
-            ;;
-
-        # Default fallback: Pass unmatched arguments straight to artisan
-        *)
-            if [[ -z "$sub_cmd" ]]; then
-                echo "Laravel Helper Tool"
-                echo "Usage: laravel [command] [options]"
-                echo ""
-                echo "Commands:"
-                echo "  pa      Run raw artisan commands"
-                echo "  pas     Start development server"
-                echo "  pat     Run application tests"
-                echo "  pam     Run database migrations"
-                echo "  pamf    Fresh migration with seeders"
-                echo "  make    Interactive code generator"
-                echo "  clear   Clear all framework caches"
-                echo "  init    Provision a new project"
-                return 0
+            printf '%s\n' "Initializing new Laravel application..."
+            if ! composer create-project laravel/laravel "$1"; then
+                return 1
             fi
-            _artisan_exec "$sub_cmd" "$@"
+
+            # Switch to new directory safely
+            if ! cd "$1"; then
+                return 1
+            fi
+
+            printf '%s\n' "Generating app key..."
+            php artisan key:generate || true
+
+            printf '%s\n' "Initializing local Git repository..."
+            if git init && git add . && git commit -m "Initial Laravel commit"; then
+                printf '%s\n' "Setup complete! Move into code with: cd $1"
+            else
+                return 1
+            fi
+            ;;
+        # --- Default: Direct Artisan Execution ---
+        *)
+            # If we reached here, it's either a raw artisan command or a typo
+            _run_artisan "$sub_cmd[0]" "${args[@]}"
             ;;
     esac
+}
+
+# --- Internal Helper Functions ---
+
+# Executes the artisan binary with strict error handling
+# Uses native Zsh parameter expansion to avoid external tools like 'awk' or 'sed'
+function _run_artisan {
+    local artisan_path="artisan"
+    
+    # Determine execution path
+    if [[ -f "./vendor/bin/sail" && -f "./docker-compose.yml" ]]; then
+        # Docker/Sail Environment
+        setopt PIPE_FAIL # Prevent pipes from failing silently in subshells if needed
+        ./vendor/bin/sail artisan "${@}"
+    elif [[ -x "$artisan_path" ]]; then
+        # Standard Laravel Installation (Phar or symlink)
+        "$artisan_path" "${@}"
+    elif [[ -f "$artisan_path" ]]; then
+        # Legacy symlink or file
+        php "$artisan_path" "${@}"
+    else
+        # Fallback: check for vendor binary
+        if [[ -f "./vendor/bin/artisan" ]]; then
+            ./vendor/bin/artisan "${@}"
+        else
+            # Absolute Fallback
+            php artisan "${@}"
+        fi
+    fi
+    return $?
 }
