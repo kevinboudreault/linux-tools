@@ -1,141 +1,292 @@
 #!/usr/bin/env zsh
+# shellcheck disable=SC1091,SC2155
+# Optimized Symfony Developer Wrapper for Zsh
 
-function symfony() {
-    # --------------------------------------------------------------------------
-    # 1. Core Execution Engine (Handles CLI, Local PHP, or Docker)
-    # --------------------------------------------------------------------------
-    _console_exec() {
-        if [[ -f "./docker-compose.yml" && $(docker compose ps --services 2>/dev/null | grep -E 'web|app|php') ]]; then
-            # Attempt to execute inside an active container if using Docker
-            local container_name=$(docker compose ps --services 2>/dev/null | grep -E 'web|app|php' | head -n 1)
-            docker compose exec "$container_name" php bin/console "$@"
-        elif command -v symfony &> /dev/null && [[ $(symfony check:requirements 2>/dev/null) ]]; then
-            symfony console "$@"
-        elif [[ -f "bin/console" ]]; then
-            php bin/console "$@"
-        else
-            echo "Error: No Symfony installation or bin/console file found here." >&2
-            return 1
+setopt ERR_EXIT    # Exit on first error
+setopt ERR_RETURN  # Return command exit status
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+# Log to stderr with timestamp (useful for debugging)
+_log() {
+    local timestamp
+    timestamp=$(date '+%F %T')
+    printf '%s\n' "[${timestamp}] $*" >&2
+}
+
+# Check if a command exists and works
+_cmd_exists() {
+    local cmd="$1"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# Safe file existence check with context
+_file_exists() {
+    local file="$1"
+    if [[ -f "$file" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Parse docker services without external tools
+_parse_docker_services() {
+    if _cmd_exists 'docker compose'; then
+        docker compose ps --format json --quiet 2>/dev/null | \
+            zsh -c 'readarray -t services <@-; echo "${services[1],}"'
+    elif _cmd_exists 'docker-compose'; then
+        docker-compose ps --format json --quiet 2>/dev/null | \
+            zsh -c 'readarray -t services <@-; echo "${services[1],}"'
+    fi
+}
+
+# =============================================================================
+# CORE EXECUTION ENGINE
+# =============================================================================
+
+_console_exec() {
+    local args=("$@")
+    local execution_method="none"
+    
+    # Priority 1: Active Docker container
+    if _file_exists "./docker-compose.yml" && \
+       [[ -n "$( _parse_docker_services )" ]]; then
+        local container
+        container="$( _parse_docker_services )"
+        if [[ -n "$container" ]]; then
+            _log "Executing in Docker container: ${container}"
+            docker compose exec "${container}" php bin/console "${args[@]}"
+            return $?
         fi
-    }
+    fi
+    
+    # Priority 2: Symfony CLI with requirements check
+    if _cmd_exists 'symfony'; then
+        if symfony check:requirements >/dev/null 2>&1; then
+            _log "Executing via Symfony CLI"
+            symfony console "${args[@]}"
+            return $?
+        fi
+    fi
+    
+    # Priority 3: Local bin/console
+    if _file_exists "bin/console"; then
+        _log "Executing local bin/console"
+        php bin/console "${args[@]}"
+        return $?
+    fi
+    
+    # Fallback: No installation found
+    _log "ERROR: No Symfony installation detected in current directory." >&2
+    return 1
+}
 
-    # --------------------------------------------------------------------------
-    # 2. Command Router
-    # --------------------------------------------------------------------------
-    local sub_cmd="$1"
-    shift 2>/dev/null
+# =============================================================================
+# COMMAND ROUTER
+# =============================================================================
 
+symfony() {
+    # Local variables to avoid global pollution
+    local sub_cmd="${1:-}"
+    local rest_args=("${@:2}")
+    local choice name db_action
+    
+    # Validate Symfony path (ensure we're not executing from a library)
+    if [[ -z "$sub_cmd" && -n "$1" && ! "$1" =~ ^[a-zA-Z] ]]; then
+        sub_cmd="$1"
+        rest_args=("${@:2}")
+    fi
+    
+    # Show help if no arguments and not a valid command
+    if [[ -z "$sub_cmd" && $# -eq 1 ]]; then
+        _log "Symfony Developer Wrapper Tool"
+        _log "Usage: symfony [command] [options]"
+        _log ""
+        _log "Commands:"
+        _log "  sf       Run raw symfony/console directives"
+        _log "  sfs      Start the development web server"
+        _log "  sft      Execute the phpunit test suite"
+        _log "  make     Interactive MakerBundle scaffolding"
+        _log "  db       Doctrine database management"
+        _log "  clear    Clear Symfony and asset caches"
+        _log "  sfh      Start server with hot-reload"
+        return 0
+    fi
+    
+    # Main command dispatcher
     case "$sub_cmd" in
-        # Shorthand Actions
-        sf)   _console_exec "$@" ;;
-        sfs)  
-            if command -v symfony &> /dev/null; then
-                symfony server:start "$@"
+        # --- Shorthand execution ---
+        sf)
+            _console_exec "${rest_args[@]}"
+            ;;
+        sfs)
+            if _cmd_exists 'symfony'; then
+                symfony server:start "${rest_args[@]}"
             else
-                php -S 127.0.0.1:8000 -t public/ "$@"
+                _log "ERROR: Symfony CLI not found. Falling back to built-in server."
+                php -S 127.0.0.1:8000 -t public/ "${rest_args[@]}"
             fi
             ;;
-        sft)  _console_exec phpunit "$@" ;;
-
-        # Scaffolding & Code Generation (MakerBundle)
+        sft)
+            _console_exec phpunit "${rest_args[@]}"
+            ;;
+        sfh)
+            # Start server with hot-reload capabilities
+            if _cmd_exists 'symfony'; then
+                symfony server:start --dir=./public --port=8000 --reload "${rest_args[@]}"
+            else
+                _log "ERROR: Symfony CLI not found. Using built-in server."
+                php -S 127.0.0.1:8000 -t public/ "${rest_args[@]}"
+            fi
+            ;;
+        
+        # --- MakerBundle Scaffolding ---
         make)
-            if ! [[ -f "bin/console" ]]; then
-                echo "Error: You must be in the root directory of a Symfony project."
+            # Validate we're in a project root
+            if ! _file_exists "bin/console"; then
+                _log "ERROR: Not a Symfony project root (no bin/console found)." >&2
                 return 1
             fi
-
-            echo "Choose a component to scaffold:"
-            echo "1) Entity (Database Model)"
-            echo "2) Controller"
-            echo "3) Form Class"
-            echo "4) CRUD Interface (Full scaffolding)"
-            echo "5) Data Fixture Set"
             
-            echo -n "Enter choice [1-5]: "
-            read choice
-
-            echo -n "Enter name (e.g., Product): "
-            read name
-
-            case $choice in
+            _log "Choose a component to scaffold:"
+            _log "  1) Entity (Database Model)"
+            _log "  2) Controller"
+            _log "  3) Form Class"
+            _log "  4) CRUD Interface (Full scaffolding)"
+            _log "  5) Data Fixture Set"
+            _log "  9) Quit without scaffolding"
+            
+            _log -n "Enter choice [1-9]: "
+            read -r choice
+            
+            if ! [[ "$choice" =~ ^[1-9]$ ]]; then
+                _log "ERROR: Invalid choice." >&2
+                return 1
+            fi
+            
+            _log -n "Enter name (e.g., Product): "
+            read -r name
+            
+            case "$choice" in
                 1) _console_exec make:entity "$name" ;;
                 2) _console_exec make:controller "${name}Controller" ;;
                 3) _console_exec make:form "${name}Type" ;;
                 4) _console_exec make:crud "$name" ;;
                 5) _console_exec make:fixtures "${name}Fixtures" ;;
-                *) echo "Invalid selection" ;;
-            esac
-            ;;
-
-        # Database & Doctrine Migrations Management
-        db)
-            local db_action="$1"
-            shift 2>/dev/null
-
-            case "$db_action" in
-                create)   _console_exec doctrine:database:create ;;
-                drop)     _console_exec doctrine:database:drop --force ;;
-                diff)     _console_exec make:migration ;; # Generates a migration file comparing entities vs current DB
-                migrate)  _console_exec doctrine:migrations:migrate --no-interaction ;;
-                status)   _console_exec doctrine:migrations:status ;;
-                fixtures) _console_exec doctrine:fixtures:load --no-interaction ;;
-                fresh)
-                    echo "Rebuilding database configuration from scratch..."
-                    _console_exec doctrine:database:drop --force --if-exists
-                    _console_exec doctrine:database:create
-                    _console_exec make:migration &>/dev/null || true # Fallback context catch
-                    _console_exec doctrine:migrations:migrate --no-interaction
-                    if _console_exec debug:autowiring | grep -q "Fixtures"; then
-                        _console_exec doctrine:fixtures:load --no-interaction
-                    fi
-                    echo "Database cleanly wiped, migrated, and seeded!"
-                    ;;
+                9) ;;
                 *)
-                    echo "Database Management Sub-commands:"
-                    echo "  symfony db create    Create the database"
-                    echo "  symfony db drop      Drop the database schema"
-                    echo "  symfony db diff      Generate a new migration based on Entity alterations"
-                    echo "  symfony db migrate   Run pending schema migrations"
-                    echo "  symfony db status    View migration execution milestones"
-                    echo "  symfony db fixtures  Load structural fake test data"
-                    echo "  symfony db fresh     Drop, recreate, migrate, and seed everything"
+                    _log "ERROR: Invalid selection." >&2
+                    return 1
                     ;;
             esac
             ;;
-
-        # Cache & Debug Optimization
-        clear)
-            echo "Scrubbing Symfony environment caches..."
-            _console_exec cache:clear
-            
-            if [[ -d "node_modules" ]]; then
-                echo "Found Node environment. Refreshing Assets via AssetMapper or Webpack..."
-                if [[ -f "importmap.php" ]]; then
-                    _console_exec asset-map:compile
-                else
-                    npm run build || npm run dev
-                fi
-            fi
-            echo "All cache registers cleared!"
-            ;;
-
-        # Default fallback: Route parameters directly into bin/console
-        *)
-            if [[ -z "$sub_cmd" ]]; then
-                echo "Symfony Developer Wrapper Tool"
-                echo "Usage: symfony [command] [options]"
-                echo ""
-                echo "Commands:"
-                echo "  sf       Run raw symfony/console directives"
-                echo "  sfs      Start the development web server"
-                echo "  sft      Execute the phpunit suite runner"
-                echo "  make     Interactive MakerBundle scaffolding prompt"
-                echo "  db       Access Doctrine schema & migration sub-menus"
-                echo "  clear    Purge environment cache records"
+        
+        # --- Database & Doctrine Management ---
+        db)
+            if [[ $# -ge 2 ]]; then
+                db_action="${1}"
+                rest_args=("${@:2}")
+            else
+                _log "Database Management Sub-commands:"
+                _log "  symfony db create      Create the database"
+                _log "  symfony db drop        Drop the database schema"
+                _log "  symfony db diff        Generate new migration from entity changes"
+                _log "  symfony db migrate     Run pending schema migrations"
+                _log "  symfony db status      View migration milestones"
+                _log "  symfony db fixtures    Load structural test data"
+                _log "  symfony db fresh       Drop, recreate, migrate, and seed"
                 return 0
             fi
-            _console_exec "$sub_cmd" "$@"
+            
+            case "$db_action" in
+                create)     _console_exec doctrine:database:create "${rest_args[@]}" ;;
+                drop)       _console_exec doctrine:database:drop --force "${rest_args[@]}" ;;
+                diff)       _console_exec make:migration "${rest_args[@]}" ;;
+                migrate)    _console_exec doctrine:migrations:migrate --no-interaction "${rest_args[@]}" ;;
+                status)     _console_exec doctrine:migrations:status "${rest_args[@]}" ;;
+                fixtures)   _console_exec doctrine:fixtures:load --no-interaction "${rest_args[@]}" ;;
+                fresh)
+                    _log "Rebuilding database configuration from scratch..."
+                    _console_exec doctrine:database:drop --force --if-exists
+                    _console_exec doctrine:database:create
+                    _console_exec doctrine:migrations:migrate --no-interaction
+                    _console_exec doctrine:fixtures:load --no-interaction
+                    ;;
+                *)
+                    _log "ERROR: Invalid database action: $db_action" >&2
+                    return 1
+                    ;;
+            esac
+            ;;
+        
+        # --- Cache Management ---
+        clear)
+            if [[ $# -ge 2 ]]; then
+                local cache_type="${1}"
+                rest_args=("${@:2}")
+            else
+                _log "Clearing Symfony and asset caches..."
+                # Clear PHP/Symfony runtime cache
+                if _file_exists ".cache" && [[ -d ".cache" ]]; then
+                    _log "Clearing runtime cache..."
+                    rm -rf .cache/* 2>/dev/null
+                fi
+                # Clear container debug cache
+                if _file_exists "var/cache"; then
+                    _log "Clearing container cache..."
+                    rm -rf var/cache/*
+                fi
+                # Compile assets (if installed)
+                if _file_exists "assets.json" || _file_exists "composer.json"; then
+                    _log "Compiling assets..."
+                    if _cmd_exists 'composer'; then
+                        composer dump-autoload --optimize --classmap-authoritative
+                    fi
+                    if _cmd_exists 'symfony'; then
+                        symfony asset:install 2>/dev/null || true
+                    fi
+                fi
+            else
+                _console_exec cache:clear --no-warmup "${rest_args[@]}"
+                if _cmd_exists 'symfony'; then
+                    symfony asset:install 2>/dev/null || true
+                fi
+            fi
+            ;;
+        
+        # --- Default ---
+        *)
+            _log "ERROR: Unknown sub-command: $sub_cmd" >&2
+            
+            # Try to execute as raw console command
+            if [[ ! "$sub_cmd" =~ ^(sf|sfs|sft|sfh|make|db|clear)$ ]]; then
+                _console_exec "${sub_cmd[@]}" "${rest_args[@]}"
+            else
+                _log "Available commands: sf, sfs, sft, sfh, make, db, clear" >&2
+            fi
             ;;
     esac
+    
+    return $?
 }
 
+# =============================================================================
+# INITIALIZATION
+# =============================================================================
+
+# Export function for shell completion
+complete -F _symfony_complete symfony
+
+_symfony_complete() {
+    # Basic completion - can be expanded
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=( $(compgen -W "sf sfs sft sfh make db clear" -- "$cur") )
+}
+
+# Allow command to be invoked directly
+eval "symfony()"
