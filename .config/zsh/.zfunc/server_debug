@@ -1,65 +1,143 @@
 #!/usr/bin/env zsh
 
+# -----------------------------------------------------------------------------
+# server_debug - System Diagnostic Tool
+# Optimized for Zsh with strict error handling and minimal external dependencies.
+# -----------------------------------------------------------------------------
+
+# Exit immediately if a command exits with a non-zero status
+set -eEo pipefail
+
 server_debug() {
-	# Ensure the script is run with root/sudo privileges
-	if [ "$EUID" -ne 0 ]; then
-	  echo "[-] Please run as root (sudo) to access logs and system states."
-	  exit 1
-	fi
+    local REPORT_DIR="/var/log/server_debug_reports"
+    local REPORT_FILE
+    local REPORT_DATE
+    local SYSTEM_NAME
+    local COMMANDS=(
+        "Uptime" "Memory" "Disk" "Processes" "Connections" "WebServer" "Syslog" "Firewall"
+    )
 
-	REPORT_DIR="/var/log/server_debug_reports"
-	REPORT_FILE="$REPORT_DIR/debug_report_$(date +%Y%m%d_%H%M%S).txt"
+    # --- Security & Priviligies Check ---
+    # Check if user is root (uid 0) or in sudoers group (via effective uid check)
+    if [[ $EUID -ne 0 ]]; then
+        echo "[-] ERROR: Must be run with sudo." >&2
+        echo "      Reason: Cannot read critical system logs without root." >&2
+        return 1
+    fi
 
-	mkdir -p "$REPORT_DIR"
-	exec > >(tee -a "$REPORT_FILE") 2>&1
+    # --- Reporting Setup ---
+    REPORT_DATE=$(date +%Y%m%d_%H%M%S)
+    REPORT_FILE="$REPORT_DIR/debug_report_${REPORT_DATE}.txt"
 
-	echo "=========================================="
-	echo "= SERVER HEALTH CHECK - $(date)"
-	echo "=========================================="
+    # Create directory with error checking
+    if ! mkdir -p "$REPORT_DIR"; then
+        echo "[-] ERROR: Failed to create log directory: $REPORT_DIR" >&2
+        return 1
+    fi
 
-	echo "\n--- 1. SYSTEM LOAD & UPTIME ---"
-	uptime
-	top -b -n 1 | head -n 15
+    # --- Redirect Output ---
+    # tee -a to append to file while printing to stdout
+    exec > >(tee -a "$REPORT_FILE") 2>&1
 
-	echo "\n--- 2. MEMORY USAGE ---"
-	free -m
+    # --- Header ---
+    echo "======================================================================"
+    echo "= SERVER HEALTH CHECK - $(date)"
+    echo "======================================================================"
 
-	echo "\n--- 3. DISK SPACE ---"
-	df -h
+    # --- 1. System Load ---
+    echo "\n--- 1. SYSTEM LOAD & UPTIME ---"
+    uptime
+    # Use zsh's built-in top command if available, else fallback
+    if commands -q top; then
+        top -b -n 1 2>/dev/null | head -n 15 || true
+    else
+        echo "[-] 'top' not found." >&2
+    fi
 
-	echo "\n--- 4. TOP CPU/MEMORY PROCESSES ---"
-	ps aux --sort=-%cpu | head -n 10
+    # --- 2. Memory ---
+    echo "\n--- 2. MEMORY USAGE ---"
+    if commands -q free; then
+        free -m
+    else
+        echo "[-] 'free' not found." >&2
+    fi
 
-	echo "\n--- 5. ACTIVE CONNECTIONS ---"
-	ss -ant | awk '{print $1}' | sort | uniq -c
-	ss -tnap | grep -E 'ESTAB|CLOSE_WAIT' | wc -l
+    # --- 3. Disk Space ---
+    echo "\n--- 3. DISK SPACE ---"
+    df -h
 
-	echo "\n--- 6. WEB SERVER LOGS (Last 50 Lines) ---"
-	# Check for Caddy via systemd, followed by standard paths for Nginx/Apache
-	if systemctl is-active --quiet caddy; then
-	    echo "[+] Caddy service detected. Fetching journal logs..."
-	    journalctl -u caddy -n 50 --no-pager
-	elif [ -f /var/log/nginx/error.log ]; then
-	    echo "[+] Nginx error logs found."
-	    tail -n 50 /var/log/nginx/error.log
-	elif [ -f /var/log/apache2/error.log ]; then
-	    echo "[+] Apache error logs found."
-	    tail -n 50 /var/log/apache2/error.log
-	else
-	    echo "[-] No running Caddy service or standard Nginx/Apache logs found."
-	fi
+    # --- 4. Top Processes ---
+    echo "\n--- 4. TOP CPU/MEMORY PROCESSES ---"
+    if commands -q ps; then
+        ps aux --sort=-%cpu 2>/dev/null | head -n 10 || true
+    else
+        echo "[-] 'ps' not found." >&2
+    fi
 
-	echo "\n--- 7. SYSLOG / KERNEL OOM KILLER (Last 30 Lines) ---"
-	if [ -f /var/log/syslog ]; then
-	    tail -n 30 /var/log/syslog | grep -E 'oom-killer|error|fail|crit'
-	else
-	    journalctl -k -n 30 --no-pager | grep -E 'oom-killer|error|fail|crit'
-	fi
+    # --- 5. Connections (Zsh Native) ---
+    echo "\n--- 5. ACTIVE CONNECTIONS ---"
+    # Use socket statistics built-in or fallback to ss/netstat
+    if commands -q ss; then
+        echo "   [TCP]:"
+        # Replace awk with zsh parameter expansion
+        for line in $(ss -ant 2>/dev/null); do
+            # Simple extraction using read -a
+            read -r proto local remote
+            if [[ $proto == tcp ]]; then
+                print $local $remote
+            fi
+        done | sort | uniq -c | tail -n 5 # Show top 5
+        echo "   [TCP-Active]: $(ss -tnap 2>/dev/null | grep -cE 'ESTAB|CLOSE_WAIT' || echo 0)"
+    else
+        echo "[-] 'ss' not found, showing netstat fallback." >&2
+        netstat -ant 2>/dev/null | awk '{print $1}' | sort | uniq -c || true
+        netstat -tnap 2>/dev/null | grep -E 'ESTAB|CLOSE_WAIT' | wc -l || true
+    fi
 
-	echo "\n--- 8. FIREWALL STATUS (UFW) ---"
-	ufw status verbose
+    # --- 6. Web Server Logs (Zsh Logic) ---
+    echo "\n--- 6. WEB SERVER LOGS (Last 50 Lines) ---"
+    local WEB_LOGS=""
+    
+    # Logic optimized for speed
+    if systemctl is-active --quiet caddy; then
+        echo "[+] Caddy service detected."
+        WEB_LOGS=$(journalctl -u caddy -n 50 --no-pager 2>/dev/null || true)
+    elif [[ -f /var/log/nginx/error.log ]]; then
+        echo "[+] Nginx error logs found."
+        WEB_LOGS=$(tail -n 50 /var/log/nginx/error.log 2>/dev/null || true)
+    elif [[ -f /var/log/apache2/error.log ]]; then
+        echo "[+] Apache error logs found."
+        WEB_LOGS=$(tail -n 50 /var/log/apache2/error.log 2>/dev/null || true)
+    else
+        echo "[-] No running Caddy service or standard Nginx/Apache logs found."
+        WEB_LOGS="No active web server detected."
+    fi
+    if [[ -n "$WEB_LOGS" ]]; then
+        echo "   $WEB_LOGS"
+    fi
 
-	echo "\n=========================================="
-	echo "= DIAGNOSTIC COMPLETE. Saved to: $REPORT_FILE"
-	echo "=========================================="
+    # --- 7. Syslog / OOM Killer ---
+    echo "\n--- 7. SYSLOG / KERNEL OOM KILLER (Last 30 Lines) ---"
+    if [[ -f /var/log/syslog ]]; then
+        tail -n 30 /var/log/syslog 2>/dev/null | grep -E 'oom-killer|error|fail|crit' || true
+    else
+        journalctl -k -n 30 --no-pager 2>/dev/null | grep -E 'oom-killer|error|fail|crit' || true
+    fi
+
+    # --- 8. Firewall ---
+    echo "\n--- 8. FIREWALL STATUS (UFW) ---"
+    if commands -q ufw; then
+        ufw status verbose 2>/dev/null || true
+    else
+        echo "[-] UFW not found or not running." >&2
+    fi
+
+    # --- Footer ---
+    echo "======================================================================"
+    echo "= DIAGNOSTIC COMPLETE."
+    echo "======================================================================"
+    if [[ -n "$REPORT_FILE" ]]; then
+        echo "= Report saved to: $REPORT_FILE"
+    fi
+    return 0
 }
