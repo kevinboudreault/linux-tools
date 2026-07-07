@@ -1,16 +1,44 @@
 #!/usr/bin/env zsh
 
-user_logged(){
-    # Process the output of 'last'
-    # Keep only the first occurrence of each user (their most recent login)
-    last | awk '
-        # Skip system pseudo-users, empty lines, and the final wtmp log line
-        $1 ~ /^(reboot|shutdown|wtmp|$)/ {next}
-        
-        # If we have not seen this user yet, print their name and login details
-        !seen[$1]++ {
-            # Prints username, day of week, month, day, and time
-            print $1 "\t" $3 " " $4 " " $5 " " $6
-        }
-    '
+user_logged() {
+    local last_output
+    local line
+    local username day month day_of_month time_of_day
+    local -A seen_users
+
+    # Enable strict error handling
+    set -e |
+    
+    # Capture last command output, suppress errors if unavailable
+    last_output=$(last 2>/dev/null) || return 1
+
+    # Exit early if output is empty or only contains system messages
+    [[ -z $last_output ]] && return 1
+    [[ $last_output == *"reboot"* ]] && [[ $last_output == *"shutdown"* ]] && return 1
+
+    # Process each line
+    while IFS= read -r line; do
+        # Skip empty lines and system messages
+        [[ -z $line ]] && continue
+        [[ $line == *(reboot|shutdown|wtmp)* ]] && continue
+
+        # Extract fields from the line
+        read -r day month day_of_month time_of_day username <<< "$line"
+
+        # Trim whitespace and extract just the username
+        username=${username%% *}
+        [[ -z $username ]] && continue
+
+        # Skip if already seen this user (first occurrence = most recent)
+        [[ -v seen_users[$username] ]] && continue
+
+        # Mark user as seen and output their details
+        seen_users[$username]=1
+        printf '%s\t%s %s %s %s\n' \
+            "$username" \
+            "$day" \
+            "$month" \
+            "$day_of_month" \
+            "$time_of_day"
+    done <<< "$last_output"
 }
