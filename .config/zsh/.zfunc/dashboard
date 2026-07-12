@@ -1,13 +1,35 @@
 #!/usr/bin/env zsh
 
+# Colors for better readability
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
 function dashboard(){
-	# Machine and timestamp
-	echo "Hostname: $(hostname)"
-  	echo "Time:     $(date)"
-	
-	#HD space left
-	echo "==={ HD }===\n"
-	#df -h | grep /dev | grep -v "loop"
-	df -h -x tmpfs -x squashfs -x devtmpfs
-	echo -e "\n\n"
+    # Headers and info
+    echo -e "${BLUE}=========================================${NC}"
+    echo -e "${GREEN}System Status Summary${NC}"
+    echo -e "${BLUE}=========================================${NC}"
+    echo "Hostname: $(hostname)"
+    echo "Time:     $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+
+    # Disk space section
+    echo -e "${YELLOW}--- Storage Information ---${NC}"
+    df -h -x tmpfs -x squashfs -x devtmpfs
+    echo ""
+
+    # Memory and Load (Added for sysadmin utility)
+    echo -e "${YELLOW}--- System Resources ---${NC}"
+    # Show memory and load average
+    free -m | awk 'NR==2 {printf "Memory: %sMB / %sMB total\n", $3, $2}' 2>/dev/null || echo "Memory: (Not available)"
+    uptime -p | sed 's/load averages?:/Load Average: /'
+    echo ""
+
+    echo -e "${BLUE}=========================================${NC}"
 }
+
+# Run dashboard if executed directly
+dashboard
