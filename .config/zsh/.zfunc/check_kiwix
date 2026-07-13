@@ -14,16 +14,21 @@ check_kiwix() {
 
 	print "Checking for the latest version of $FLAVOR..."
 
-	# 1. Fetch the directory page
-	# 2. Extract links matching the flavor
-	# 3. Sort them to find the most recent date in the filename (YYYY-MM format)
-	local LATEST_FILE=$(curl -s "$BASE_URL" | grep -oE "${FLAVOR}_[0-9]{4}-[0-9]{2}\.zim" | sort -r | head -n 1)
+	# Fetch raw output and check success
+	local RAW_OUTPUT=$(curl -sfL "$BASE_URL")
+	if [[ $? -ne 0 ]]; then
+		print "Error: Failed to reach $BASE_URL"
+		return 1
+	fi
+
+	# Extract filenames and find the most recent one
+	local LATEST_FILE=$(echo "$RAW_OUTPUT" | grep -oE "${FLAVOR}_[0-9]{4}-[0-9]{2}\.zim" | sort -r | head -n 1)
 
 	if [[ -n "$LATEST_FILE" ]]; then
-		local FULL_URL="${BASE_URL}${LATEST_FILE}"
 		print "Latest Version: $LATEST_FILE"
-		print "Download URL:   $FULL_URL"
+		print "Download URL:   ${BASE_URL}${LATEST_FILE}"
 	else
-		print "Error: Could not find the latest version. Check your internet connection or flavor name."
+		print "Error: No valid .zim file found for $FLAVOR. Check your internet connection or flavor name."
+		return 1
 	fi
 }
