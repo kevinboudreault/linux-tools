@@ -52,8 +52,15 @@ disk_cleanup() {
     echo "Clean up temporary files"
     rm -rf /tmp/*
 
+    # 9. Display result
+    echo ""
+    echo ""
+    echo "========================"
     echo "--- Cleanup Complete ---"
+    echo "========================"
     echo ""
     echo "--- Root Disk Space ---"
+    echo ""
+
     df -h / | grep /
 }
